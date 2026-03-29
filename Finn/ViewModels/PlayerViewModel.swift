@@ -46,6 +46,11 @@ final class PlayerViewModel {
     private let playbackService: PlaybackService
     private var countdownTask: Task<Void, Never>?
 
+    // MARK: - Continuous Scrub (hold to fast-forward/rewind)
+
+    private var scrubTask: Task<Void, Never>?
+    private var scrubSpeed: Double = 1.0
+
     init(itemID: String, jellyfinService: JellyfinService) {
         self.itemID = itemID
         self.jellyfinService = jellyfinService
@@ -169,6 +174,30 @@ final class PlayerViewModel {
         guard let player else { return }
         let target = max(currentTime - seconds, 0)
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+    }
+
+    func startContinuousScrub(forward: Bool) {
+        scrubTask?.cancel()
+        scrubSpeed = 2.0 // Start at 2x
+        scrubTask = Task {
+            while !Task.isCancelled {
+                let delta = forward ? scrubSpeed : -scrubSpeed
+                let target = max(0, min(currentTime + delta, duration))
+                await player?.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+
+                // Accelerate: increase speed every 0.5s, cap at 60x
+                try? await Task.sleep(for: .milliseconds(100))
+                if scrubSpeed < 60 {
+                    scrubSpeed *= 1.05
+                }
+            }
+        }
+    }
+
+    func stopContinuousScrub() {
+        scrubTask?.cancel()
+        scrubTask = nil
+        scrubSpeed = 1.0
     }
 
     func seek(to fraction: Double) {

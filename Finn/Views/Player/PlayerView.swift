@@ -131,7 +131,10 @@ struct PlayerView: View {
                     onPlayPause: { viewModel.togglePlayPause() },
                     onSkipForward: { viewModel.skipForward() },
                     onSkipBackward: { viewModel.skipBackward() },
-                    onSeek: { viewModel.seek(to: $0) }
+                    onSeek: { viewModel.seek(to: $0) },
+                    onHoldForward: { viewModel.startContinuousScrub(forward: true) },
+                    onHoldBackward: { viewModel.startContinuousScrub(forward: false) },
+                    onHoldRelease: { viewModel.stopContinuousScrub() }
                 )
                 .padding(.horizontal, 120)
                 .padding(.bottom, 60)

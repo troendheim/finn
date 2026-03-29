@@ -8,6 +8,9 @@ struct TransportControls: View {
     let onSkipForward: () -> Void
     let onSkipBackward: () -> Void
     let onSeek: (Double) -> Void
+    var onHoldForward: (() -> Void)? = nil
+    var onHoldBackward: (() -> Void)? = nil
+    var onHoldRelease: (() -> Void)? = nil
 
     @State private var isScrubbing = false
     @State private var scrubPosition: Double = 0
@@ -43,7 +46,7 @@ struct TransportControls: View {
 
             // Transport icons
             HStack(spacing: 60) {
-                // Skip backward
+                // Skip backward with hold
                 Button {
                     onSkipBackward()
                 } label: {
@@ -51,6 +54,10 @@ struct TransportControls: View {
                         .font(.system(size: 36))
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5)
+                        .onEnded { _ in onHoldBackward?() }
+                )
 
                 // Play/Pause
                 Button {
@@ -61,7 +68,7 @@ struct TransportControls: View {
                 }
                 .buttonStyle(.plain)
 
-                // Skip forward
+                // Skip forward with hold
                 Button {
                     onSkipForward()
                 } label: {
@@ -69,6 +76,10 @@ struct TransportControls: View {
                         .font(.system(size: 36))
                 }
                 .buttonStyle(.plain)
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5)
+                        .onEnded { _ in onHoldForward?() }
+                )
             }
         }
     }
