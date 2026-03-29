@@ -27,16 +27,6 @@ final class SearchViewModel {
 
 // MARK: - Views
 
-struct HomeView: View {
-    @Bindable var viewModel: HomeViewModel
-    let imageService: ImageService?
-    @Binding var navigationPath: NavigationPath
-
-    var body: some View {
-        Text("Home")
-    }
-}
-
 struct MovieDetailView: View {
     @Bindable var viewModel: MovieDetailViewModel
     let imageService: ImageService?
