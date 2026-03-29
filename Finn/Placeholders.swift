@@ -3,13 +3,6 @@
 
 import SwiftUI
 
-// MARK: - ViewModels
-
-@MainActor @Observable
-final class PlayerViewModel {
-    init(itemID: String, jellyfinService: JellyfinService) {}
-}
-
 // MARK: - Views
 
 struct PlayerView: View {
