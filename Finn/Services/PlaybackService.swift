@@ -1,0 +1,177 @@
+import Foundation
+import AVFoundation
+import JellyfinAPI
+
+@MainActor
+@Observable
+final class PlaybackService {
+    private let jellyfinService: JellyfinService
+
+    init(jellyfinService: JellyfinService) {
+        self.jellyfinService = jellyfinService
+    }
+
+    // MARK: - Stream URL Construction
+
+    /// Get the stream URL and media source for an item
+    func getStreamInfo(itemID: String) async throws -> StreamInfo {
+        let response = try await jellyfinService.getPlaybackInfo(itemID: itemID)
+        guard let mediaSource = response.mediaSources?.first else {
+            throw FinnError.noMediaSource
+        }
+
+        let playSessionID = response.playSessionID
+
+        // Determine play method
+        let (url, playMethod) = try buildStreamURL(
+            mediaSource: mediaSource,
+            serverURL: jellyfinService.serverURL
+        )
+
+        return StreamInfo(
+            url: url,
+            playMethod: playMethod,
+            mediaSource: mediaSource,
+            playSessionID: playSessionID
+        )
+    }
+
+    // MARK: - Progress Reporting
+
+    func reportStart(
+        itemID: String,
+        mediaSourceID: String?,
+        playSessionID: String?,
+        positionTicks: Int?,
+        playMethod: PlayMethod
+    ) async {
+        let info = PlaybackStartInfo(
+            canSeek: true,
+            isPaused: false,
+            itemID: itemID,
+            mediaSourceID: mediaSourceID,
+            playMethod: playMethod,
+            playSessionID: playSessionID,
+            positionTicks: positionTicks
+        )
+        try? await jellyfinService.reportPlaybackStart(info: info)
+    }
+
+    func reportProgress(
+        itemID: String,
+        mediaSourceID: String?,
+        playSessionID: String?,
+        positionTicks: Int,
+        isPaused: Bool,
+        playMethod: PlayMethod,
+        audioStreamIndex: Int? = nil,
+        subtitleStreamIndex: Int? = nil
+    ) async {
+        let info = PlaybackProgressInfo(
+            audioStreamIndex: audioStreamIndex,
+            canSeek: true,
+            isPaused: isPaused,
+            itemID: itemID,
+            mediaSourceID: mediaSourceID,
+            playMethod: playMethod,
+            playSessionID: playSessionID,
+            positionTicks: positionTicks,
+            subtitleStreamIndex: subtitleStreamIndex
+        )
+        try? await jellyfinService.reportPlaybackProgress(info: info)
+    }
+
+    func reportStopped(
+        itemID: String,
+        mediaSourceID: String?,
+        playSessionID: String?,
+        positionTicks: Int
+    ) async {
+        let info = PlaybackStopInfo(
+            itemID: itemID,
+            mediaSourceID: mediaSourceID,
+            playSessionID: playSessionID,
+            positionTicks: positionTicks
+        )
+        try? await jellyfinService.reportPlaybackStopped(info: info)
+    }
+
+    // MARK: - Audio/Subtitle Track Helpers
+
+    /// Get audio streams from a media source
+    static func audioStreams(from mediaSource: MediaSourceInfo) -> [MediaStream] {
+        (mediaSource.mediaStreams ?? []).filter { $0.type == .audio }
+    }
+
+    /// Get subtitle streams from a media source
+    static func subtitleStreams(from mediaSource: MediaSourceInfo) -> [MediaStream] {
+        (mediaSource.mediaStreams ?? []).filter { $0.type == .subtitle }
+    }
+
+    /// Check if a subtitle format requires transcoding for burn-in
+    static func requiresBurnIn(stream: MediaStream) -> Bool {
+        guard let codec = stream.codec?.lowercased() else { return false }
+        // ASS/SSA subtitles require burn-in via transcode
+        return codec == "ass" || codec == "ssa"
+    }
+
+    // MARK: - Private
+
+    private func buildStreamURL(
+        mediaSource: MediaSourceInfo,
+        serverURL: URL?
+    ) throws -> (URL, PlayMethod) {
+        guard let serverURL else { throw FinnError.notConnected }
+
+        // Check for direct play compatibility
+        let container = mediaSource.container?.lowercased() ?? ""
+        let avPlayerContainers = ["mp4", "m4v", "mov", "mkv"]
+
+        if mediaSource.isSupportsDirectPlay == true,
+           avPlayerContainers.contains(where: { container.contains($0) }) {
+            // Build direct stream URL
+            var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)!
+            components.path += "/Videos/\(mediaSource.id ?? "")/stream"
+            components.queryItems = [
+                URLQueryItem(name: "static", value: "true"),
+                URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
+                URLQueryItem(name: "api_key", value: jellyfinService.client?.accessToken)
+            ]
+            if let url = components.url {
+                return (url, .directPlay)
+            }
+        }
+
+        // Fall back to direct stream
+        if mediaSource.isSupportsDirectStream == true {
+            var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)!
+            components.path += "/Videos/\(mediaSource.id ?? "")/stream"
+            components.queryItems = [
+                URLQueryItem(name: "static", value: "true"),
+                URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
+                URLQueryItem(name: "api_key", value: jellyfinService.client?.accessToken)
+            ]
+            if let url = components.url {
+                return (url, .directStream)
+            }
+        }
+
+        // Fall back to transcode
+        if mediaSource.isSupportsTranscoding == true,
+           let transcodePath = mediaSource.transcodingURL {
+            let url = serverURL.appendingPathComponent(transcodePath)
+            return (url, .transcode)
+        }
+
+        throw FinnError.noMediaSource
+    }
+}
+
+// MARK: - StreamInfo
+
+struct StreamInfo {
+    let url: URL
+    let playMethod: PlayMethod
+    let mediaSource: MediaSourceInfo
+    let playSessionID: String?
+}
