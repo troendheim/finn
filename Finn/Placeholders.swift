@@ -6,11 +6,6 @@ import SwiftUI
 // MARK: - ViewModels
 
 @MainActor @Observable
-final class HomeViewModel {
-    init(jellyfinService: JellyfinService) {}
-}
-
-@MainActor @Observable
 final class MovieDetailViewModel {
     init(itemID: String, jellyfinService: JellyfinService) {}
 }
