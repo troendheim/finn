@@ -142,6 +142,7 @@ final class PlayerViewModel {
         // Cleanup
         progressTimer?.cancel()
         countdownTask?.cancel()
+        scrubTask?.cancel()
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
         }
@@ -185,7 +186,7 @@ final class PlayerViewModel {
                 let target = max(0, min(currentTime + delta, duration))
                 await player?.seek(to: CMTime(seconds: target, preferredTimescale: 600))
 
-                // Accelerate: increase speed every 0.5s, cap at 60x
+                // Accelerate: increase speed every 100ms, cap at 60x
                 try? await Task.sleep(for: .milliseconds(100))
                 if scrubSpeed < 60 {
                     scrubSpeed *= 1.05

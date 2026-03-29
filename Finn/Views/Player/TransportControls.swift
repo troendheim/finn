@@ -7,22 +7,18 @@ struct TransportControls: View {
     let onPlayPause: () -> Void
     let onSkipForward: () -> Void
     let onSkipBackward: () -> Void
-    let onSeek: (Double) -> Void
     var onHoldForward: (() -> Void)? = nil
     var onHoldBackward: (() -> Void)? = nil
     var onHoldRelease: (() -> Void)? = nil
 
-    @State private var isScrubbing = false
-    @State private var scrubPosition: Double = 0
-
     private var progress: Double {
         guard duration > 0 else { return 0 }
-        return isScrubbing ? scrubPosition : (currentTime / duration)
+        return currentTime / duration
     }
 
     var body: some View {
         VStack(spacing: 20) {
-            // Scrubber bar
+            // Scrubber bar (read-only progress indicator)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     // Track background
@@ -46,7 +42,7 @@ struct TransportControls: View {
 
             // Transport icons
             HStack(spacing: 60) {
-                // Skip backward with hold
+                // Skip backward (tap: -10s, hold: continuous rewind)
                 Button {
                     onSkipBackward()
                 } label: {
@@ -56,7 +52,15 @@ struct TransportControls: View {
                 .buttonStyle(.plain)
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.5)
-                        .onEnded { _ in onHoldBackward?() }
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            if case .second(true, _) = value {
+                                onHoldBackward?()
+                            }
+                        }
+                        .onEnded { _ in
+                            onHoldRelease?()
+                        }
                 )
 
                 // Play/Pause
@@ -68,7 +72,7 @@ struct TransportControls: View {
                 }
                 .buttonStyle(.plain)
 
-                // Skip forward with hold
+                // Skip forward (tap: +10s, hold: continuous fast-forward)
                 Button {
                     onSkipForward()
                 } label: {
@@ -78,7 +82,15 @@ struct TransportControls: View {
                 .buttonStyle(.plain)
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.5)
-                        .onEnded { _ in onHoldForward?() }
+                        .sequenced(before: DragGesture(minimumDistance: 0))
+                        .onChanged { value in
+                            if case .second(true, _) = value {
+                                onHoldForward?()
+                            }
+                        }
+                        .onEnded { _ in
+                            onHoldRelease?()
+                        }
                 )
             }
         }
