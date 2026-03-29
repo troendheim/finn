@@ -1,0 +1,159 @@
+import SwiftUI
+import JellyfinAPI
+
+struct MovieDetailView: View {
+    @Bindable var viewModel: MovieDetailViewModel
+    let imageService: ImageService?
+    @Binding var navigationPath: NavigationPath
+
+    var body: some View {
+        ScrollView {
+            if viewModel.isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 200)
+            } else if let item = viewModel.item {
+                ZStack(alignment: .topLeading) {
+                    // Backdrop
+                    backdropImage(item)
+
+                    // Content overlay
+                    HStack(alignment: .top, spacing: 60) {
+                        // Left: main info
+                        VStack(alignment: .leading, spacing: 20) {
+                            Spacer().frame(height: 300)
+
+                            Text(item.name ?? "")
+                                .font(.system(size: 52, weight: .bold))
+
+                            Text(viewModel.metadataLine)
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+
+                            if let rating = viewModel.ratingDisplay {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "star.fill")
+                                        .foregroundStyle(.yellow)
+                                    Text(rating)
+                                        .font(.title3)
+                                }
+                            }
+
+                            if let genres = item.genres, !genres.isEmpty {
+                                Text(genres.joined(separator: ", "))
+                                    .font(.callout)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            // Action buttons
+                            HStack(spacing: 20) {
+                                Button {
+                                    navigationPath.append(AppDestination.player(itemID: viewModel.itemID))
+                                } label: {
+                                    HStack {
+                                        Image(systemName: item.hasProgress ? "play.fill" : "play.fill")
+                                        Text(viewModel.playButtonTitle)
+                                    }
+                                    .padding(.horizontal, 30)
+                                    .padding(.vertical, 12)
+                                }
+                                .tint(.red)
+
+                                Button {
+                                    Task { await viewModel.toggleFavorite() }
+                                } label: {
+                                    Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
+                                        .font(.title3)
+                                }
+                            }
+
+                            // Progress bar for resume
+                            if item.hasProgress {
+                                ProgressView(value: item.playbackProgress)
+                                    .tint(.red)
+                                    .frame(maxWidth: 300)
+                            }
+
+                            if let overview = item.overview {
+                                Text(overview)
+                                    .font(.body)
+                                    .lineLimit(4)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: 700)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                        // Right sidebar: credits and tracks
+                        VStack(alignment: .leading, spacing: 20) {
+                            Spacer().frame(height: 320)
+
+                            if let director = item.directorNames {
+                                InfoSection(title: "Director", value: director)
+                            }
+
+                            if !item.castNames.isEmpty {
+                                InfoSection(title: "Cast", value: item.castNames.joined(separator: ", "))
+                            }
+
+                            if !item.audioLanguages.isEmpty {
+                                InfoSection(title: "Audio", value: item.audioLanguages.joined(separator: ", "))
+                            }
+
+                            if !item.subtitleLanguages.isEmpty {
+                                InfoSection(title: "Subtitles", value: item.subtitleLanguages.joined(separator: ", "))
+                            }
+                        }
+                        .frame(width: 350)
+                    }
+                    .padding(.horizontal, 60)
+                }
+            } else if let error = viewModel.error {
+                Text(error)
+                    .foregroundStyle(.red)
+                    .padding(.top, 200)
+            }
+        }
+        .task {
+            await viewModel.loadDetail()
+        }
+    }
+
+    @ViewBuilder
+    private func backdropImage(_ item: BaseItemDto) -> some View {
+        if let id = item.id, let url = imageService?.backdropURL(itemID: id) {
+            AsyncImage(url: url) { image in
+                image.resizable().scaledToFill()
+                    .frame(height: 600)
+                    .clipped()
+                    .overlay(
+                        LinearGradient(
+                            colors: [.clear, .black.opacity(0.7), .black],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        )
+                    )
+            } placeholder: {
+                Rectangle().fill(.black).frame(height: 600)
+            }
+        }
+    }
+}
+
+// MARK: - InfoSection
+
+struct InfoSection: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title.uppercased())
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.callout)
+                .lineLimit(3)
+        }
+    }
+}

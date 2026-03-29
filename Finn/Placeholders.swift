@@ -6,11 +6,6 @@ import SwiftUI
 // MARK: - ViewModels
 
 @MainActor @Observable
-final class MovieDetailViewModel {
-    init(itemID: String, jellyfinService: JellyfinService) {}
-}
-
-@MainActor @Observable
 final class SeriesDetailViewModel {
     init(itemID: String, jellyfinService: JellyfinService) {}
 }
@@ -26,16 +21,6 @@ final class SearchViewModel {
 }
 
 // MARK: - Views
-
-struct MovieDetailView: View {
-    @Bindable var viewModel: MovieDetailViewModel
-    let imageService: ImageService?
-    @Binding var navigationPath: NavigationPath
-
-    var body: some View {
-        Text("Movie Detail")
-    }
-}
 
 struct SeriesDetailView: View {
     @Bindable var viewModel: SeriesDetailViewModel
