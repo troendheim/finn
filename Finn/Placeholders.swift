@@ -10,11 +10,6 @@ final class PlayerViewModel {
     init(itemID: String, jellyfinService: JellyfinService) {}
 }
 
-@MainActor @Observable
-final class SearchViewModel {
-    init(jellyfinService: JellyfinService) {}
-}
-
 // MARK: - Views
 
 struct PlayerView: View {
@@ -22,15 +17,5 @@ struct PlayerView: View {
 
     var body: some View {
         Text("Player")
-    }
-}
-
-struct SearchView: View {
-    @Bindable var viewModel: SearchViewModel
-    let imageService: ImageService?
-    @Binding var navigationPath: NavigationPath
-
-    var body: some View {
-        Text("Search")
     }
 }
