@@ -33,18 +33,18 @@ struct LandscapeCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 if let episodeLabel = item.episodeLabel {
                     Text(episodeLabel)
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
 
                 Text(item.seriesName ?? item.name ?? "")
-                    .font(.callout)
+                    .font(.body)
                     .fontWeight(.semibold)
                     .lineLimit(1)
 
                 if item.hasProgress, let total = item.runTimeTicks, let pos = item.userData?.playbackPositionTicks {
                     Text(TimeFormatting.remaining(totalTicks: total, positionTicks: pos))
-                        .font(.caption2)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -57,9 +57,9 @@ struct LandscapeCard: View {
                     GeometryReader { geo in
                         Rectangle()
                             .fill(.red)
-                            .frame(width: geo.size.width * item.playbackProgress, height: 3)
+                            .frame(width: geo.size.width * item.playbackProgress, height: 5)
                     }
-                    .frame(height: 3)
+                    .frame(height: 5)
                 }
             }
         }

@@ -23,12 +23,26 @@ struct ContentRow<Card: View>: View {
                             } label: {
                                 cardBuilder(item)
                             }
-                            .buttonStyle(.plain)
+                            .tvCardButton()
                         }
                     }
                     .padding(.horizontal, 60)
                 }
             }
         }
+    }
+}
+
+// MARK: - Platform Button Style
+
+extension View {
+    /// Applies `.buttonStyle(.card)` on tvOS for proper focus-driven lift/shadow,
+    /// and `.buttonStyle(.plain)` on macOS where `.card` is unavailable.
+    func tvCardButton() -> some View {
+        #if os(tvOS)
+        self.buttonStyle(.card)
+        #else
+        self.buttonStyle(.plain)
+        #endif
     }
 }

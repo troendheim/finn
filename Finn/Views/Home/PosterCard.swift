@@ -12,7 +12,7 @@ struct PosterCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // Poster image
-            ZStack {
+            ZStack(alignment: .bottomLeading) {
                 if let id = item.id, let url = imageService?.posterURL(itemID: id, maxWidth: Int(cardWidth)) {
                     AsyncImage(url: url) { image in
                         image.resizable().scaledToFill()
@@ -22,13 +22,26 @@ struct PosterCard: View {
                 } else {
                     Rectangle().fill(.gray.opacity(0.2))
                 }
+
+                // Type badge — only shown for series to distinguish from movies
+                if item.type == .series {
+                    Text("Series")
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 3)
+                        .background(.black.opacity(0.6))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .padding(8)
+                }
             }
             .frame(width: cardWidth, height: cardHeight)
             .clipShape(RoundedRectangle(cornerRadius: 10))
 
             // Title below
             Text(item.name ?? "")
-                .font(.caption)
+                .font(.callout)
                 .lineLimit(1)
                 .frame(width: cardWidth, alignment: .leading)
         }

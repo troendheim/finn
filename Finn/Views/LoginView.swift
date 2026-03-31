@@ -8,7 +8,8 @@ struct LoginView: View {
     var body: some View {
         VStack(spacing: 40) {
             Text(viewModel.isManualLogin ? "Sign In" : "Who's watching?")
-                .font(.system(size: 48, weight: .bold))
+                .font(.title)
+                .fontWeight(.bold)
                 .padding(.top, 60)
 
             if viewModel.isLoading && viewModel.users.isEmpty && !viewModel.isManualLogin {
@@ -89,7 +90,7 @@ struct LoginView: View {
                                 .font(.title3)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .tvCardButton()
                 }
             }
             .padding(.horizontal, 60)
@@ -113,7 +114,8 @@ struct LoginView: View {
         ZStack {
             Circle().fill(.gray.opacity(0.3))
             Text(String((user.name ?? "?").prefix(1)).uppercased())
-                .font(.system(size: 60, weight: .bold))
+                .font(.title)
+                .fontWeight(.bold)
                 .foregroundStyle(.white)
         }
     }
