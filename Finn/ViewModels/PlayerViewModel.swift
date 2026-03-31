@@ -221,16 +221,18 @@ final class PlayerViewModel {
         )
 
         // Cleanup
+        playerActionTask?.cancel()
         teardownPlayer()
     }
 
     /// Shared cleanup: cancel tasks, invalidate observers, detach subtitle renderer, nil out player.
+    /// Note: does NOT cancel `playerActionTask` because `restartPlayback` calls teardownPlayer
+    /// from within playerActionTask. Callers that need to cancel it should do so explicitly.
     private func teardownPlayer() {
         progressTimer?.cancel()
         countdownTask?.cancel()
         toastTask?.cancel()
         retryTask?.cancel()
-        playerActionTask?.cancel()
         scrubTask?.cancel()
         controlsHideTask?.cancel()
         seekCommitTask?.cancel()
@@ -354,14 +356,33 @@ final class PlayerViewModel {
     }
 
     /// Retry playback after an error.
+    /// Preserves the user's current audio/subtitle selections so the server
+    /// generates the correct stream (important for external/burn-in subtitles).
     func retryPlayback() {
         guard !isLoading else { return }
         error = nil
         isLoading = true
+
+        // Save user selections before teardown
+        let savedAudioIndex = selectedAudioIndex
+        let savedSubtitleIndex = selectedSubtitleIndex
+        let hadItem = item != nil
+
+        playerActionTask?.cancel()
         teardownPlayer()
         retryTask?.cancel()
         retryTask = Task {
-            await onAppear()
+            if hadItem {
+                // Item was already loaded — use restartPlayback which passes audio/subtitle
+                // indices to the server, ensuring external/burn-in subtitles are included.
+                await restartPlayback(
+                    audioStreamIndex: savedAudioIndex,
+                    subtitleStreamIndex: savedSubtitleIndex
+                )
+            } else {
+                // Initial load failed — do full onAppear
+                await onAppear()
+            }
         }
     }
 
