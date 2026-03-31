@@ -56,6 +56,131 @@ struct PlayerView: View {
 
     var body: some View {
         ZStack {
+            // Player content layer — handles remote move/exit commands
+            #if os(tvOS)
+            playerContent
+                .focusable(!viewModel.isControlsVisible && !viewModel.isPickerVisible)
+                .onMoveCommand { direction in
+                    if direction == .down {
+                        viewModel.isPickerVisible = true
+                    } else if direction == .left || direction == .right {
+                        if viewModel.isControlsVisible {
+                            let increment = viewModel.duration * 0.02
+                            let delta = direction == .right ? increment : -increment
+                            viewModel.updateSeekPreview(delta: delta)
+                        } else {
+                            if direction == .right {
+                                viewModel.skipForward()
+                            } else {
+                                viewModel.skipBackward()
+                            }
+                            viewModel.showControlsIfHidden()
+                            viewModel.resetControlsTimer()
+                        }
+                    } else {
+                        viewModel.showControlsIfHidden()
+                        viewModel.resetControlsTimer()
+                    }
+                }
+            #else
+            playerContent
+            #endif
+
+            // Audio/subtitle picker — separate from onMoveCommand so
+            // the tvOS focus engine can navigate between columns freely.
+            if viewModel.isPickerVisible {
+                AudioSubtitlePicker(
+                    audioStreams: viewModel.audioStreams,
+                    subtitleStreams: viewModel.subtitleStreams,
+                    selectedAudioIndex: viewModel.selectedAudioIndex,
+                    selectedSubtitleIndex: viewModel.selectedSubtitleIndex,
+                    onSelectAudio: { viewModel.selectAudio(index: $0) },
+                    onSelectSubtitle: { viewModel.selectSubtitle(index: $0) },
+                    onDismiss: { viewModel.isPickerVisible = false }
+                )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isPickerVisible)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.isControlsVisible)
+        .task {
+            await viewModel.onAppear()
+        }
+        .onDisappear {
+            Task { await viewModel.onDisappear() }
+        }
+        #if os(tvOS)
+        .onPlayPauseCommand {
+            if viewModel.isSeekPreviewing {
+                viewModel.commitSeek()
+            } else {
+                viewModel.togglePlayPause()
+            }
+            viewModel.showControlsIfHidden()
+        }
+        .onExitCommand {
+            if viewModel.isSeekPreviewing {
+                viewModel.cancelSeekPreview()
+            } else if viewModel.isPickerVisible {
+                viewModel.isPickerVisible = false
+            } else if viewModel.isControlsVisible {
+                viewModel.isControlsVisible = false
+            } else {
+                dismiss()
+            }
+        }
+        #else
+        .gesture(
+            DragGesture(minimumDistance: 50)
+                .onEnded { value in
+                    if value.translation.height > 50 && !viewModel.isPickerVisible {
+                        viewModel.isPickerVisible = true
+                    }
+                }
+        )
+        .onKeyPress(.escape) {
+            if viewModel.isSeekPreviewing {
+                viewModel.cancelSeekPreview()
+            } else if viewModel.isPickerVisible {
+                viewModel.isPickerVisible = false
+            } else if viewModel.isControlsVisible {
+                viewModel.isControlsVisible = false
+            } else {
+                dismiss()
+            }
+            return .handled
+        }
+        .onKeyPress(.space) {
+            if viewModel.isSeekPreviewing {
+                viewModel.commitSeek()
+            } else {
+                viewModel.togglePlayPause()
+            }
+            viewModel.showControlsIfHidden()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            viewModel.skipBackward()
+            viewModel.showControlsIfHidden()
+            viewModel.resetControlsTimer()
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            viewModel.skipForward()
+            viewModel.showControlsIfHidden()
+            viewModel.resetControlsTimer()
+            return .handled
+        }
+        #endif
+    }
+
+    // MARK: - Player Content
+
+    /// All player layers except the audio/subtitle picker.
+    /// Separated so that `.onMoveCommand` only applies here and doesn't
+    /// intercept directional input meant for the picker's focus engine.
+    private var playerContent: some View {
+        ZStack {
             // Video layer
             if let player = viewModel.player {
                 AVPlayerLayerView(player: player)
@@ -119,6 +244,14 @@ struct PlayerView: View {
             if viewModel.isControlsVisible && !viewModel.isLoading {
                 controlsOverlay
                     .transition(.opacity)
+                    #if os(tvOS)
+                    .onMoveCommand { direction in
+                        if direction == .down {
+                            viewModel.isControlsVisible = false
+                            viewModel.isPickerVisible = true
+                        }
+                    }
+                    #endif
             }
 
             // Resume toast
@@ -135,20 +268,6 @@ struct PlayerView: View {
                 .transition(.opacity)
             }
 
-            // Audio/subtitle picker
-            if viewModel.isPickerVisible {
-                AudioSubtitlePicker(
-                    audioStreams: viewModel.audioStreams,
-                    subtitleStreams: viewModel.subtitleStreams,
-                    selectedAudioIndex: viewModel.selectedAudioIndex,
-                    selectedSubtitleIndex: viewModel.selectedSubtitleIndex,
-                    onSelectAudio: { viewModel.selectAudio(index: $0) },
-                    onSelectSubtitle: { viewModel.selectSubtitle(index: $0) },
-                    onDismiss: { viewModel.isPickerVisible = false }
-                )
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             // Next episode overlay
             if viewModel.showNextEpisodeOverlay, let next = viewModel.nextEpisode {
                 nextEpisodeOverlay(next)
@@ -159,107 +278,6 @@ struct PlayerView: View {
                 playbackCompleteOverlay
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: viewModel.isPickerVisible)
-        .animation(.easeInOut(duration: 0.3), value: viewModel.isControlsVisible)
-        #if os(tvOS)
-        .focusable(!viewModel.isControlsVisible && !viewModel.isPickerVisible)
-        #endif
-        .task {
-            await viewModel.onAppear()
-        }
-        .onDisappear {
-            Task { await viewModel.onDisappear() }
-        }
-        #if os(tvOS)
-        .onPlayPauseCommand {
-            if viewModel.isSeekPreviewing {
-                viewModel.commitSeek()
-            } else {
-                viewModel.togglePlayPause()
-            }
-            viewModel.showControlsIfHidden()
-        }
-        .onMoveCommand { direction in
-            if viewModel.isPickerVisible {
-                return
-            }
-            if direction == .down {
-                viewModel.isPickerVisible = true
-            } else if direction == .left || direction == .right {
-                if viewModel.isControlsVisible {
-                    // Swipe-to-scrub: left/right moves seek preview
-                    let increment = viewModel.duration * 0.02 // 2% per swipe
-                    let delta = direction == .right ? increment : -increment
-                    viewModel.updateSeekPreview(delta: delta)
-                } else {
-                    // Skip forward/backward 10s when controls are hidden
-                    if direction == .right {
-                        viewModel.skipForward()
-                    } else {
-                        viewModel.skipBackward()
-                    }
-                    viewModel.showControlsIfHidden()
-                    viewModel.resetControlsTimer()
-                }
-            } else {
-                viewModel.showControlsIfHidden()
-                viewModel.resetControlsTimer()
-            }
-        }
-        .onExitCommand {
-            if viewModel.isSeekPreviewing {
-                viewModel.cancelSeekPreview()
-            } else if viewModel.isPickerVisible {
-                viewModel.isPickerVisible = false
-            } else if viewModel.isControlsVisible {
-                viewModel.isControlsVisible = false
-            } else {
-                dismiss()
-            }
-        }
-        #else
-        .gesture(
-            DragGesture(minimumDistance: 50)
-                .onEnded { value in
-                    if value.translation.height > 50 && !viewModel.isPickerVisible {
-                        viewModel.isPickerVisible = true
-                    }
-                }
-        )
-        .onKeyPress(.escape) {
-            if viewModel.isSeekPreviewing {
-                viewModel.cancelSeekPreview()
-            } else if viewModel.isPickerVisible {
-                viewModel.isPickerVisible = false
-            } else if viewModel.isControlsVisible {
-                viewModel.isControlsVisible = false
-            } else {
-                dismiss()
-            }
-            return .handled
-        }
-        .onKeyPress(.space) {
-            if viewModel.isSeekPreviewing {
-                viewModel.commitSeek()
-            } else {
-                viewModel.togglePlayPause()
-            }
-            viewModel.showControlsIfHidden()
-            return .handled
-        }
-        .onKeyPress(.leftArrow) {
-            viewModel.skipBackward()
-            viewModel.showControlsIfHidden()
-            viewModel.resetControlsTimer()
-            return .handled
-        }
-        .onKeyPress(.rightArrow) {
-            viewModel.skipForward()
-            viewModel.showControlsIfHidden()
-            viewModel.resetControlsTimer()
-            return .handled
-        }
-        #endif
     }
 
     // MARK: - Controls Overlay
