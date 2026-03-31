@@ -14,8 +14,16 @@ final class PlaybackService {
     // MARK: - Stream URL Construction
 
     /// Get the stream URL and media source for an item
-    func getStreamInfo(itemID: String) async throws -> StreamInfo {
-        let response = try await jellyfinService.getPlaybackInfo(itemID: itemID)
+    func getStreamInfo(
+        itemID: String,
+        audioStreamIndex: Int? = nil,
+        subtitleStreamIndex: Int? = nil
+    ) async throws -> StreamInfo {
+        let response = try await jellyfinService.getPlaybackInfo(
+            itemID: itemID,
+            audioStreamIndex: audioStreamIndex,
+            subtitleStreamIndex: subtitleStreamIndex
+        )
         guard let mediaSource = response.mediaSources?.first else {
             throw FinnError.noMediaSource
         }
@@ -111,8 +119,10 @@ final class PlaybackService {
     /// Check if a subtitle format requires transcoding for burn-in
     static func requiresBurnIn(stream: MediaStream) -> Bool {
         guard let codec = stream.codec?.lowercased() else { return false }
-        // ASS/SSA subtitles require burn-in via transcode
-        return codec == "ass" || codec == "ssa"
+        // ASS/SSA styled subtitles and PGS/DVD bitmap subtitles require burn-in via transcode
+        // because AVPlayer cannot render these formats natively
+        let burnInCodecs: Set<String> = ["ass", "ssa", "pgs", "pgssub", "dvdsub"]
+        return burnInCodecs.contains(codec)
     }
 
     // MARK: - Private
@@ -125,7 +135,7 @@ final class PlaybackService {
 
         // Check for direct play compatibility
         let container = mediaSource.container?.lowercased() ?? ""
-        let avPlayerContainers = ["mp4", "m4v", "mov", "mkv"]
+        let avPlayerContainers = ["mp4", "m4v", "mov"]
 
         if mediaSource.isSupportsDirectPlay == true,
            avPlayerContainers.contains(where: { container.contains($0) }) {
@@ -142,8 +152,9 @@ final class PlaybackService {
             }
         }
 
-        // Fall back to direct stream
-        if mediaSource.isSupportsDirectStream == true {
+        // Fall back to direct stream (only for containers AVPlayer can handle)
+        if mediaSource.isSupportsDirectStream == true,
+           avPlayerContainers.contains(where: { container.contains($0) }) {
             var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)!
             components.path += "/Videos/\(mediaSource.id ?? "")/stream"
             components.queryItems = [
@@ -159,8 +170,11 @@ final class PlaybackService {
         // Fall back to transcode
         if mediaSource.isSupportsTranscoding == true,
            let transcodePath = mediaSource.transcodingURL {
-            let url = serverURL.appendingPathComponent(transcodePath)
-            return (url, .transcode)
+            // transcodingURL is a path with query string (e.g. /videos/.../master.m3u8?params=...)
+            // Use URL(string:relativeTo:) to preserve query parameters correctly
+            if let url = URL(string: transcodePath, relativeTo: serverURL)?.absoluteURL {
+                return (url, .transcode)
+            }
         }
 
         throw FinnError.noMediaSource
