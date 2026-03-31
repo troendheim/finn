@@ -49,6 +49,7 @@ final class LoginViewModel {
     }
 
     func signIn() async {
+        guard !isLoading else { return }
         let loginUsername: String
         if let user = selectedUser, let name = user.name {
             loginUsername = name
