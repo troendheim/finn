@@ -341,7 +341,9 @@ final class PlayerViewModel {
 
     /// Retry playback after an error.
     func retryPlayback() {
+        guard !isLoading else { return }
         error = nil
+        isLoading = true
         Task {
             await onAppear()
         }
