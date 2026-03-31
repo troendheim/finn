@@ -4,3 +4,11 @@
 xcuserdata/
 DerivedData/
 .DS_Store
+build/
+
+# Agent/tool config
+.agents/
+.claude/
+.junie/
+.opencode/
+skills-lock.json
