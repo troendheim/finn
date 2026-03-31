@@ -35,6 +35,7 @@ final class JellyfinService {
         static let userID = "finn.userID"
         static let accessToken = "finn.accessToken"
         static let preferredAudioLanguage = "finn.preferredAudioLanguage"
+        static let preferredSubtitleLanguage = "finn.preferredSubtitleLanguage"
     }
 
     // MARK: - Init
@@ -407,6 +408,13 @@ final class JellyfinService {
     var preferredAudioLanguage: String? {
         get { UserDefaults.standard.string(forKey: Keys.preferredAudioLanguage) }
         set { UserDefaults.standard.set(newValue, forKey: Keys.preferredAudioLanguage) }
+    }
+
+    // MARK: - Subtitle Preference
+
+    var preferredSubtitleLanguage: String? {
+        get { UserDefaults.standard.string(forKey: Keys.preferredSubtitleLanguage) }
+        set { UserDefaults.standard.set(newValue, forKey: Keys.preferredSubtitleLanguage) }
     }
 
     // MARK: - Private

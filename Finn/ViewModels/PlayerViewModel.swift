@@ -105,6 +105,7 @@ final class PlayerViewModel {
 
             // Apply preferred audio language
             applyPreferredAudioLanguage()
+            applyPreferredSubtitleLanguage()
 
             // Create player
             let playerItem = AVPlayerItem(url: info.url)
@@ -390,6 +391,15 @@ final class PlayerViewModel {
     func selectSubtitle(index: Int?) {
         selectedSubtitleIndex = index
         updateTrackLabels()
+
+        // Remember subtitle language preference
+        if let index {
+            if let stream = subtitleStreams.first(where: { $0.index == index }) {
+                jellyfinService.preferredSubtitleLanguage = stream.language
+            }
+        } else {
+            jellyfinService.preferredSubtitleLanguage = nil
+        }
 
         guard let player, let currentItem = player.currentItem else { return }
 
@@ -807,6 +817,14 @@ final class PlayerViewModel {
         guard let preferred = jellyfinService.preferredAudioLanguage else { return }
         if let match = audioStreams.first(where: { $0.language == preferred }) {
             selectedAudioIndex = match.index
+            updateTrackLabels()
+        }
+    }
+
+    private func applyPreferredSubtitleLanguage() {
+        guard let preferred = jellyfinService.preferredSubtitleLanguage else { return }
+        if let match = subtitleStreams.first(where: { $0.language == preferred }) {
+            selectedSubtitleIndex = match.index
             updateTrackLabels()
         }
     }
