@@ -103,8 +103,7 @@ struct AudioSubtitlePicker: View {
                 .focusSection()
                 .padding(50)
                 .frame(maxHeight: 500)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .liquidGlass(in: 20)
                 .padding(.horizontal, 80)
                 .padding(.bottom, 60)
             }

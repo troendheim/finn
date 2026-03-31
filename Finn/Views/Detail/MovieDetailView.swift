@@ -60,7 +60,7 @@ struct MovieDetailView: View {
                                     .padding(.horizontal, 30)
                                     .padding(.vertical, 12)
                                 }
-                                .tint(.red)
+                                .glassButtonStyle(prominent: true)
 
                                 Button {
                                     Task { await viewModel.toggleFavorite() }
@@ -68,6 +68,7 @@ struct MovieDetailView: View {
                                     Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
                                         .font(.title3)
                                 }
+                                .glassButtonStyle()
                                 .accessibilityLabel(viewModel.isFavorite ? "Remove from favorites" : "Add to favorites")
                             }
 

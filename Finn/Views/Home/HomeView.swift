@@ -19,21 +19,26 @@ struct HomeView: View {
 
                     Spacer()
 
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .font(.title2)
-                    }
-                    .accessibilityLabel("Settings")
+                    HStack(spacing: 16) {
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .font(.title2)
+                        }
+                        .glassButtonStyle()
+                        .accessibilityLabel("Settings")
 
-                    Button {
-                        navigationPath.append(AppDestination.search)
-                    } label: {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title2)
+                        Button {
+                            navigationPath.append(AppDestination.search)
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.title2)
+                        }
+                        .glassButtonStyle()
+                        .accessibilityLabel("Search")
                     }
-                    .accessibilityLabel("Search")
+                    .liquidGlassContainer(spacing: 16)
                 }
                 .padding(.horizontal, 60)
                 .padding(.top, 20)
@@ -165,6 +170,7 @@ struct HomeView: View {
                 Text("Sign Out")
                     .frame(maxWidth: .infinity)
             }
+            .glassButtonStyle()
 
             Button(role: .destructive) {
                 showSettings = false
@@ -173,10 +179,12 @@ struct HomeView: View {
                 Text("Switch Server")
                     .frame(maxWidth: .infinity)
             }
+            .glassButtonStyle()
 
             Button("Cancel", role: .cancel) {
                 showSettings = false
             }
+            .glassButtonStyle()
         }
         .padding(40)
     }

@@ -30,9 +30,8 @@ struct PosterCard: View {
                         .fontWeight(.medium)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
-                        .background(.black.opacity(0.6))
                         .foregroundStyle(.white.opacity(0.9))
-                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                        .liquidGlass(in: 4)
                         .padding(8)
                 }
             }

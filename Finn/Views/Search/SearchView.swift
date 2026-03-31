@@ -20,8 +20,7 @@ struct SearchView: View {
                     }
             }
             .padding()
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .liquidGlass(in: 12, isInteractive: true)
             .padding(.horizontal, 60)
             .padding(.top, 30)
 
@@ -112,8 +111,7 @@ struct SearchView: View {
             .fontWeight(.medium)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
-            .background(.ultraThinMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
+            .liquidGlass(in: 4)
     }
 
     private func metadataText(_ item: BaseItemDto) -> Text {

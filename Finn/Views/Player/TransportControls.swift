@@ -77,8 +77,7 @@ struct TransportControls: View {
                             .monospacedDigit()
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(.ultraThinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .liquidGlass(in: 6)
                             .offset(x: geo.size.width * previewProg - 30, y: -30)
                     }
                 }

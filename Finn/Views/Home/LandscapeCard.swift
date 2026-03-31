@@ -49,6 +49,7 @@ struct LandscapeCard: View {
                 }
             }
             .padding(16)
+            .liquidGlass(in: 12)
 
             // Progress bar at bottom
             if item.playbackProgress > 0 {

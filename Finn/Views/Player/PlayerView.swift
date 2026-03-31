@@ -102,10 +102,11 @@ struct PlayerView: View {
                         Button("Retry") {
                             viewModel.retryPlayback()
                         }
-                        .tint(.red)
+                        .glassButtonStyle(prominent: true)
                         Button("Dismiss") {
                             dismiss()
                         }
+                        .glassButtonStyle()
                     }
                 }
             } else if viewModel.isLoading || viewModel.isBuffering {
@@ -128,8 +129,7 @@ struct PlayerView: View {
                         .font(.callout)
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
-                        .background(.ultraThinMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .liquidGlass(in: 10)
                         .padding(.bottom, 80)
                 }
                 .transition(.opacity)
@@ -344,16 +344,16 @@ struct PlayerView: View {
                         Button("Play Now") {
                             viewModel.playNextEpisode()
                         }
-                        .tint(.red)
+                        .glassButtonStyle(prominent: true)
 
                         Button("Cancel") {
                             viewModel.cancelNextEpisode()
                         }
+                        .glassButtonStyle()
                     }
                 }
                 .padding(30)
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .liquidGlass(in: 16)
                 .padding(40)
             }
         }
@@ -376,7 +376,7 @@ struct PlayerView: View {
                 Button("Done") {
                     dismiss()
                 }
-                .tint(.red)
+                .glassButtonStyle(prominent: true)
             }
         }
     }

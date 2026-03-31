@@ -42,15 +42,13 @@ struct LoginView: View {
             TextField("Username", text: $viewModel.username)
                 .textFieldStyle(.plain)
                 .padding()
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .liquidGlass(in: 12, isInteractive: true)
                 .frame(maxWidth: 400)
 
             SecureField("Password", text: $viewModel.password)
                 .textFieldStyle(.plain)
                 .padding()
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .liquidGlass(in: 12, isInteractive: true)
                 .frame(maxWidth: 400)
                 .onSubmit {
                     Task { await viewModel.signIn() }
@@ -67,6 +65,7 @@ struct LoginView: View {
                         .frame(width: 200)
                 }
             }
+            .glassButtonStyle(prominent: true)
             .disabled(viewModel.isLoading || viewModel.username.isEmpty)
             .padding(.top, 10)
         }
@@ -132,8 +131,7 @@ struct LoginView: View {
             SecureField("Password", text: $viewModel.password)
                 .textFieldStyle(.plain)
                 .padding()
-                .background(.ultraThinMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .liquidGlass(in: 12, isInteractive: true)
                 .frame(maxWidth: 400)
                 .onSubmit {
                     Task { await viewModel.signIn() }
@@ -143,6 +141,7 @@ struct LoginView: View {
                 Button("Cancel") {
                     viewModel.cancelPassword()
                 }
+                .glassButtonStyle()
 
                 Button {
                     Task { await viewModel.signIn() }
@@ -155,6 +154,7 @@ struct LoginView: View {
                             .frame(width: 120)
                     }
                 }
+                .glassButtonStyle(prominent: true)
                 .disabled(viewModel.isLoading)
             }
         }
