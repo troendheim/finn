@@ -132,7 +132,7 @@ final class PlayerViewModel {
             self.player = avPlayer
 
             // Observe player item status for errors
-            statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+            statusObservation = playerItem.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     if item.status == .failed {
@@ -648,7 +648,7 @@ final class PlayerViewModel {
             self.player = avPlayer
 
             // Observe errors
-            statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+            statusObservation = playerItem.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     if item.status == .failed {
