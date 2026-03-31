@@ -153,65 +153,43 @@ struct SeriesDetailView: View {
 
     private var seasonPicker: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: 16) {
                 ForEach(viewModel.seasons, id: \.id) { season in
+                    let isSelected = viewModel.selectedSeason?.id == season.id
                     Button {
                         Task { await viewModel.selectSeason(season) }
                     } label: {
                         Text(season.name ?? "Season")
                             .font(.callout)
-                            .fontWeight(viewModel.selectedSeason?.id == season.id ? .bold : .regular)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
+                            .fontWeight(isSelected ? .bold : .regular)
+                            .foregroundStyle(isSelected ? .primary : .secondary)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
                     }
                     .tvCardButton()
-                    .liquidGlass(
-                        in: 12,
-                        isInteractive: true
-                    )
-                    .opacity(viewModel.selectedSeason?.id == season.id ? 1.0 : 0.6)
                 }
             }
-            .liquidGlassContainer(spacing: 8)
+            .padding(.vertical, 20)
         }
     }
 
     // MARK: - Episode List
 
     private var episodeList: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 16) {
             if viewModel.isLoadingEpisodes {
                 ProgressView()
                     .padding(.top, 40)
             } else {
                 ForEach(viewModel.episodes, id: \.id) { episode in
-                    HStack(spacing: 0) {
-                        // Main episode button — plays the episode
-                        Button {
-                            if let id = episode.id {
-                                navigationPath.append(AppDestination.player(itemID: id))
-                            }
-                        } label: {
-                            episodeRow(episode)
+                    Button {
+                        if let id = episode.id {
+                            navigationPath.append(AppDestination.player(itemID: id))
                         }
-                        .tvCardButton()
-
-                        // Mark played/unplayed toggle button
-                        Button {
-                            Task { await viewModel.togglePlayed(episode: episode) }
-                        } label: {
-                            Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "circle")
-                                .font(.title3)
-                                .foregroundStyle(episode.isWatched ? .green : .secondary)
-                                .frame(width: 56, height: 56)
-                                .contentShape(Rectangle())
-                        }
-                        .tvCardButton()
-                        .accessibilityLabel(episode.isWatched ? "Mark as unwatched" : "Mark as watched")
+                    } label: {
+                        episodeRow(episode)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-                    .liquidGlass(in: 16)
+                    .tvCardButton()
                 }
             }
         }
@@ -219,11 +197,11 @@ struct SeriesDetailView: View {
 
     @ViewBuilder
     private func episodeRow(_ episode: BaseItemDto) -> some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 20) {
             // Left border indicator for current episode
             RoundedRectangle(cornerRadius: 2)
                 .fill(episode.hasProgress ? Color.red : Color.clear)
-                .frame(width: 4, height: 80)
+                .frame(width: 4)
 
             // Thumbnail
             if let url = imageService?.landscapeURL(item: episode, maxWidth: 400) {
@@ -232,7 +210,7 @@ struct SeriesDetailView: View {
                 } placeholder: {
                     Rectangle().fill(.gray.opacity(0.15))
                 }
-                .frame(width: 200, height: 112)
+                .frame(width: 240, height: 135)
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(alignment: .bottom) {
                     if episode.playbackProgress > 0 {
@@ -256,19 +234,15 @@ struct SeriesDetailView: View {
 
             // Episode info
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Text("E\(episode.indexNumber ?? 0)")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 4))
-                    Text(episode.name ?? "")
-                        .font(.body)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-                }
+                Text("E\(episode.indexNumber ?? 0)")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundStyle(.secondary)
+
+                Text(episode.name ?? "")
+                    .font(.body)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
 
                 if let runtime = episode.runtimeDisplay {
                     Text(runtime)
@@ -278,7 +252,15 @@ struct SeriesDetailView: View {
             }
 
             Spacer()
+
+            // Watched indicator
+            Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "eye.slash")
+                .font(.body)
+                .foregroundStyle(episode.isWatched ? .green : .clear)
+                .padding(.trailing, 8)
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
         .opacity(episode.isWatched ? 0.5 : 1.0)
     }
 
