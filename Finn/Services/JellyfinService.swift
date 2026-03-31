@@ -145,6 +145,24 @@ final class JellyfinService {
         return result.items ?? []
     }
 
+    /// Next Up for a specific series — cross-season next episode
+    func getNextUp(seriesID: String) async throws -> BaseItemDto? {
+        guard let client else { throw FinnError.notConnected }
+        let params = Paths.GetNextUpParameters(
+            userID: currentUserID,
+            limit: 1,
+            fields: [.overview, .mediaSources, .mediaStreams],
+            seriesID: seriesID,
+            enableImages: true,
+            imageTypeLimit: 1,
+            enableImageTypes: [.primary, .backdrop, .thumb],
+            enableUserData: true,
+            enableRewatching: false
+        )
+        let result = try await client.send(Paths.getNextUp(parameters: params)).value
+        return result.items?.first
+    }
+
     /// Recently Added — newest content
     func getLatestMedia() async throws -> [BaseItemDto] {
         guard let client else { throw FinnError.notConnected }
