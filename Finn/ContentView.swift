@@ -66,34 +66,33 @@ struct ContentView: View {
     private var rootView: some View {
         if jellyfinService.isAuthenticated {
             HomeView(
-                viewModel: {
-                    if homeViewModel == nil {
-                        homeViewModel = HomeViewModel(jellyfinService: jellyfinService)
-                    }
-                    return homeViewModel!
-                }(),
+                viewModel: cachedModel(&homeViewModel) {
+                    HomeViewModel(jellyfinService: jellyfinService)
+                },
                 imageService: jellyfinService.imageService,
                 navigationPath: $navigationPath
             )
         } else if jellyfinService.serverURL != nil {
             LoginView(
-                viewModel: {
-                    if loginViewModel == nil {
-                        loginViewModel = LoginViewModel(jellyfinService: jellyfinService)
-                    }
-                    return loginViewModel!
-                }(),
+                viewModel: cachedModel(&loginViewModel) {
+                    LoginViewModel(jellyfinService: jellyfinService)
+                },
                 imageService: jellyfinService.imageService
             )
         } else {
             ServerConnectView(
-                viewModel: {
-                    if serverConnectViewModel == nil {
-                        serverConnectViewModel = ServerConnectViewModel(jellyfinService: jellyfinService)
-                    }
-                    return serverConnectViewModel!
-                }()
+                viewModel: cachedModel(&serverConnectViewModel) {
+                    ServerConnectViewModel(jellyfinService: jellyfinService)
+                }
             )
         }
+    }
+
+    /// Return an existing cached model or create and cache a new one.
+    private func cachedModel<T>(_ storage: inout T?, create: () -> T) -> T {
+        if let existing = storage { return existing }
+        let model = create()
+        storage = model
+        return model
     }
 }
