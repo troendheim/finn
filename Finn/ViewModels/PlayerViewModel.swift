@@ -156,16 +156,7 @@ final class PlayerViewModel {
                 }
             }
 
-            // Start playback
-            avPlayer.play()
-            isPlaying = true
-            isLoading = false
-
-            // Setup time observer
-            setupTimeObserver(avPlayer)
-            setupTimeControlObserver(avPlayer)
-
-            // Observe playback end
+            // Observe playback end (register before play to avoid race with short content)
             endObservation = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: playerItem,
@@ -175,6 +166,15 @@ final class PlayerViewModel {
                     self?.handlePlaybackEnd()
                 }
             }
+
+            // Start playback
+            avPlayer.play()
+            isPlaying = true
+            isLoading = false
+
+            // Setup time observer
+            setupTimeObserver(avPlayer)
+            setupTimeControlObserver(avPlayer)
 
             // Select default subtitle if server specifies one
             if let defaultSubIndex = selectedSubtitleIndex {
@@ -663,6 +663,17 @@ final class PlayerViewModel {
                 await avPlayer.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
             }
 
+            // Observe playback end (register before play to avoid race with short content)
+            endObservation = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handlePlaybackEnd()
+                }
+            }
+
             // Resume or stay paused
             if !wasPaused {
                 avPlayer.play()
@@ -675,16 +686,6 @@ final class PlayerViewModel {
             // Re-setup observers
             setupTimeObserver(avPlayer)
             setupTimeControlObserver(avPlayer)
-
-            endObservation = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime,
-                object: playerItem,
-                queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor [weak self] in
-                    self?.handlePlaybackEnd()
-                }
-            }
 
             // Re-select non-burn-in subtitle if active
             if currentBurnInSubtitleIndex == nil, let subIndex = selectedSubtitleIndex {
