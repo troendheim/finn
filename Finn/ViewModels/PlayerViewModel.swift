@@ -241,6 +241,7 @@ final class PlayerViewModel {
         }
         player?.pause()
         player = nil
+        streamInfo = nil
     }
 
     // MARK: - Transport Controls
@@ -605,16 +606,19 @@ final class PlayerViewModel {
         let savedTime = currentTime
         let wasPaused = !isPlaying
 
+        // Capture stream info before teardown (teardownPlayer nils it)
+        let previousStreamInfo = streamInfo
+
         // Tear down current playback
         teardownPlayer()
 
         // Report stop with current position
-        if let streamInfo {
+        if let previousStreamInfo {
             let ticks = secondsToTicks(savedTime)
             await playbackService.reportStopped(
                 itemID: itemID,
-                mediaSourceID: streamInfo.mediaSource.id,
-                playSessionID: streamInfo.playSessionID,
+                mediaSourceID: previousStreamInfo.mediaSource.id,
+                playSessionID: previousStreamInfo.playSessionID,
                 positionTicks: ticks
             )
         }
