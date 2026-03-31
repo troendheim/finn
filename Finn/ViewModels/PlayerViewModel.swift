@@ -82,6 +82,16 @@ final class PlayerViewModel {
     // MARK: - Lifecycle
 
     func onAppear() async {
+        // Configure audio session for media playback
+        #if os(tvOS)
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {
+            // Non-fatal: playback may still work with default session
+        }
+        #endif
+
         do {
             // Load item detail for title and next episode info
             item = try await jellyfinService.getItem(id: itemID)
