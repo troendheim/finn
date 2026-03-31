@@ -506,19 +506,30 @@ final class PlayerViewModel {
                 subtitleText = ""
                 playerActionTask?.cancel()
                 playerActionTask = Task {
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
-                    // After restart, select the legible option
-                    if let newItem = self.player?.currentItem {
-                        await selectLegibleOption(for: index, on: newItem)
-                    }
+                    // Restart with the new subtitle index so the server includes it in the manifest
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
                 }
                 return
             }
 
-            // Standard embedded subtitle: select via AVMediaSelectionGroup
-            playerActionTask?.cancel()
-            playerActionTask = Task {
-                await selectLegibleOption(for: index, on: currentItem)
+            // Standard embedded subtitle
+            if streamInfo?.playMethod == .transcode {
+                // HLS transcode: the manifest only contains the subtitle track that was
+                // requested when the stream was created. To switch to a different track
+                // we must restart playback so the server generates a new manifest with
+                // the correct subtitle embedded.
+                subtitleText = ""
+                playerActionTask?.cancel()
+                playerActionTask = Task {
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
+                }
+            } else {
+                // Direct play/stream: all subtitle tracks are in the container,
+                // so we can select via AVMediaSelectionGroup without restarting.
+                playerActionTask?.cancel()
+                playerActionTask = Task {
+                    await selectLegibleOption(for: index, on: currentItem)
+                }
             }
         } else {
             // Subtitles off
@@ -532,8 +543,16 @@ final class PlayerViewModel {
                 }
                 return
             }
-            Task {
-                await deselectLegibleOptions(on: currentItem)
+            if streamInfo?.playMethod == .transcode {
+                // HLS transcode: restart without subtitle to get a clean manifest
+                playerActionTask?.cancel()
+                playerActionTask = Task {
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
+                }
+            } else {
+                Task {
+                    await deselectLegibleOptions(on: currentItem)
+                }
             }
         }
 
@@ -563,20 +582,43 @@ final class PlayerViewModel {
             Locale(identifier: $0).language.languageCode?.identifier
         }
 
-        // Try to match by language code first, then by display name
-        let option = group.options.first { option in
-            if let targetLang, let optionLang = option.locale?.language.languageCode?.identifier {
-                return optionLang == targetLang
+        // Gather all AVPlayer options that match the target language
+        let langMatches: [AVMediaSelectionOption] = targetLang.map { lang in
+            group.options.filter { option in
+                option.locale?.language.languageCode?.identifier == lang
             }
-            return false
-        } ?? group.options.first { option in
-            if let targetTitle {
-                return option.displayName.localizedCaseInsensitiveContains(targetTitle)
-            }
-            return false
-        } ?? group.options.first // Fallback: select first available
+        } ?? []
 
-        playerItem.select(option, in: group)
+        let option: AVMediaSelectionOption?
+        if langMatches.count == 1 {
+            // Only one track for this language — use it directly
+            option = langMatches.first
+        } else if langMatches.count > 1 {
+            // Multiple tracks share the same language (e.g. English + English SDH).
+            // Use display title to pick the right one, then fall back to positional
+            // ordering: the Nth Jellyfin stream for this language maps to the Nth
+            // AVPlayer option for that language.
+            option = langMatches.first { $0.displayName.localizedCaseInsensitiveContains(targetTitle ?? "") }
+                ?? {
+                    // Positional match: count how many earlier Jellyfin subtitle streams
+                    // share the same language to determine which AVPlayer option to pick.
+                    let sameLanguageStreams = subtitleStreams.filter { $0.language == targetStream?.language }
+                    let position = sameLanguageStreams.firstIndex(where: { $0.index == jellyfinIndex }) ?? 0
+                    return position < langMatches.count ? langMatches[position] : langMatches.first
+                }()
+        } else {
+            // No language match — try display name, then fall back to first available
+            option = group.options.first { opt in
+                if let targetTitle {
+                    return opt.displayName.localizedCaseInsensitiveContains(targetTitle)
+                }
+                return false
+            } ?? group.options.first
+        }
+
+        if let option {
+            playerItem.select(option, in: group)
+        }
     }
 
     /// Deselect all legible media options (turn subtitles off).
