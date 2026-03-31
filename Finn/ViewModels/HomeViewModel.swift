@@ -77,7 +77,7 @@ final class HomeViewModel {
     // MARK: - Private
 
     /// Load a section, returning empty array on failure instead of throwing.
-    private func loadSection(_ fetch: @Sendable () async throws -> [BaseItemDto]) async -> [BaseItemDto] {
+    private func loadSection(_ fetch: () async throws -> [BaseItemDto]) async -> [BaseItemDto] {
         do {
             return try await fetch()
         } catch {
