@@ -298,8 +298,9 @@ final class PlayerViewModel {
     }
 
     func seek(to fraction: Double) {
-        guard let player else { return }
-        let target = duration * fraction
+        guard let player, fraction.isFinite else { return }
+        let clampedFraction = min(max(fraction, 0), 1)
+        let target = duration * clampedFraction
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
     }
 
