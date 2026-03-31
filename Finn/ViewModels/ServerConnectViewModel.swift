@@ -8,6 +8,7 @@ final class ServerConnectViewModel {
     var isConnecting = false
     var error: String?
     var isConnected = false
+    var isInsecureWarning = false
 
     private let jellyfinService: JellyfinService
 
@@ -28,9 +29,19 @@ final class ServerConnectViewModel {
             urlString = "https://\(urlString)"
         }
 
-        guard let url = URL(string: urlString) else {
+        // Strip trailing slashes
+        while urlString.hasSuffix("/") {
+            urlString.removeLast()
+        }
+
+        guard let url = URL(string: urlString), url.host != nil else {
             error = "Invalid URL"
             return
+        }
+
+        // Warn about insecure connections (but allow them)
+        if url.scheme == "http" {
+            isInsecureWarning = true
         }
 
         isConnecting = true
@@ -40,7 +51,7 @@ final class ServerConnectViewModel {
             try await jellyfinService.connectToServer(url: url)
             isConnected = true
         } catch {
-            self.error = "Could not connect to server. Check the URL and try again."
+            self.error = "Could not connect to server: \(error.localizedDescription)"
         }
 
         isConnecting = false
