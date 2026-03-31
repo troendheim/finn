@@ -42,6 +42,7 @@ struct HomeView: View {
                 }
                 .padding(.horizontal, 60)
                 .padding(.top, 20)
+                .focusSection()
 
                 if !viewModel.hasLoaded && viewModel.continueWatching.isEmpty {
                     ProgressView()
