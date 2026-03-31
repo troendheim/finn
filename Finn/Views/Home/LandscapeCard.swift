@@ -11,8 +11,8 @@ struct LandscapeCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            // Background image
-            if let id = item.id, let url = imageService?.backdropURL(itemID: id, maxWidth: Int(cardWidth)) {
+            // Background image — try thumb, backdrop, then primary with series fallback
+            if let url = imageService?.landscapeURL(item: item, maxWidth: Int(cardWidth)) {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {

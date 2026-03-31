@@ -6,9 +6,11 @@ import JellyfinAPI
 final class LoginViewModel {
     var users: [UserDto] = []
     var selectedUser: UserDto?
+    var username = ""
     var password = ""
     var isLoading = false
     var isShowingPassword = false
+    var isManualLogin = false
     var error: String?
     var isLoggedIn = false
 
@@ -23,26 +25,37 @@ final class LoginViewModel {
         error = nil
         do {
             users = try await jellyfinService.getPublicUsers()
+            // If no public users, fall back to manual login
+            if users.isEmpty {
+                isManualLogin = true
+            }
         } catch {
-            self.error = "Failed to load users"
+            // If fetching users fails, fall back to manual login
+            isManualLogin = true
         }
         isLoading = false
     }
 
     func selectUser(_ user: UserDto) {
         selectedUser = user
+        username = user.name ?? ""
         password = ""
         error = nil
-        if user.hasPassword == true {
-            isShowingPassword = true
-        } else {
+        if user.hasPassword == false {
             Task { await signIn() }
+        } else {
+            isShowingPassword = true
         }
     }
 
     func signIn() async {
-        guard let user = selectedUser, let username = user.name else {
-            error = "No user selected"
+        let loginUsername: String
+        if let user = selectedUser, let name = user.name {
+            loginUsername = name
+        } else if !username.isEmpty {
+            loginUsername = username
+        } else {
+            error = "Please enter a username"
             return
         }
 
@@ -50,10 +63,10 @@ final class LoginViewModel {
         error = nil
 
         do {
-            try await jellyfinService.signIn(username: username, password: password)
+            try await jellyfinService.signIn(username: loginUsername, password: password)
             isLoggedIn = true
         } catch {
-            self.error = "Login failed. Check your password."
+            self.error = "Login failed. Check your credentials."
         }
 
         isLoading = false
@@ -62,6 +75,7 @@ final class LoginViewModel {
     func cancelPassword() {
         isShowingPassword = false
         selectedUser = nil
+        username = ""
         password = ""
         error = nil
     }

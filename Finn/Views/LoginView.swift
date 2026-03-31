@@ -7,12 +7,14 @@ struct LoginView: View {
 
     var body: some View {
         VStack(spacing: 40) {
-            Text("Who's watching?")
+            Text(viewModel.isManualLogin ? "Sign In" : "Who's watching?")
                 .font(.system(size: 48, weight: .bold))
                 .padding(.top, 60)
 
-            if viewModel.isLoading && viewModel.users.isEmpty {
+            if viewModel.isLoading && viewModel.users.isEmpty && !viewModel.isManualLogin {
                 ProgressView()
+            } else if viewModel.isManualLogin {
+                manualLoginView
             } else if viewModel.isShowingPassword {
                 passwordView
             } else {
@@ -31,6 +33,45 @@ struct LoginView: View {
             await viewModel.loadUsers()
         }
     }
+
+    // MARK: - Manual Login (no public users)
+
+    private var manualLoginView: some View {
+        VStack(spacing: 20) {
+            TextField("Username", text: $viewModel.username)
+                .textFieldStyle(.plain)
+                .padding()
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: 400)
+
+            SecureField("Password", text: $viewModel.password)
+                .textFieldStyle(.plain)
+                .padding()
+                .background(.ultraThinMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: 400)
+                .onSubmit {
+                    Task { await viewModel.signIn() }
+                }
+
+            Button {
+                Task { await viewModel.signIn() }
+            } label: {
+                if viewModel.isLoading {
+                    ProgressView()
+                        .frame(width: 200)
+                } else {
+                    Text("Sign In")
+                        .frame(width: 200)
+                }
+            }
+            .disabled(viewModel.isLoading || viewModel.username.isEmpty)
+            .padding(.top, 10)
+        }
+    }
+
+    // MARK: - User Grid (public users available)
 
     private var userGrid: some View {
         ScrollView(.horizontal) {
@@ -76,6 +117,8 @@ struct LoginView: View {
                 .foregroundStyle(.white)
         }
     }
+
+    // MARK: - Password (for selected public user)
 
     private var passwordView: some View {
         VStack(spacing: 30) {

@@ -167,7 +167,7 @@ struct SeriesDetailView: View {
                 .frame(width: 4, height: 80)
 
             // Thumbnail
-            if let id = episode.id, let url = imageService?.thumbURL(itemID: id) {
+            if let url = imageService?.landscapeURL(item: episode, maxWidth: 400) {
                 AsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
