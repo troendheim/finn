@@ -7,9 +7,9 @@ extension BaseItemDto {
         userData?.isPlayed == true
     }
 
-    /// Playback progress as 0.0-1.0
+    /// Playback progress as 0.0-1.0 (clamped)
     var playbackProgress: Double {
-        (userData?.playedPercentage ?? 0) / 100.0
+        min(max((userData?.playedPercentage ?? 0) / 100.0, 0), 1)
     }
 
     /// Whether there is resume progress
