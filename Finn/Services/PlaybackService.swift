@@ -140,7 +140,9 @@ final class PlaybackService {
         if mediaSource.isSupportsDirectPlay == true,
            avPlayerContainers.contains(where: { container.contains($0) }) {
             // Build direct stream URL
-            var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)!
+            guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
+                throw FinnError.noMediaSource
+            }
             components.path += "/Videos/\(mediaSource.id ?? "")/stream"
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
@@ -155,7 +157,9 @@ final class PlaybackService {
         // Fall back to direct stream (only for containers AVPlayer can handle)
         if mediaSource.isSupportsDirectStream == true,
            avPlayerContainers.contains(where: { container.contains($0) }) {
-            var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false)!
+            guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
+                throw FinnError.noMediaSource
+            }
             components.path += "/Videos/\(mediaSource.id ?? "")/stream"
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),

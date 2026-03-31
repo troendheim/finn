@@ -766,7 +766,8 @@ final class PlayerViewModel {
     }
 
     private func secondsToTicks(_ seconds: Double) -> Int {
-        Int(seconds * 10_000_000)
+        guard seconds.isFinite else { return 0 }
+        return Int(seconds * 10_000_000)
     }
 
     private func updateTitle() {
@@ -876,7 +877,7 @@ final class PlayerViewModel {
     }
 
     private func startNextEpisodeCountdown() {
-        nextEpisodeCountdown = Int(duration - currentTime)
+        nextEpisodeCountdown = max(0, Int(duration - currentTime))
         countdownTask = Task {
             while nextEpisodeCountdown > 0 && !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))

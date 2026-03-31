@@ -20,6 +20,7 @@ enum TimeFormatting {
 
     /// Formats seconds into "X:XX:XX" for player display
     static func playerTime(seconds: Double) -> String {
+        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
         let total = Int(seconds)
         let hours = total / 3600
         let minutes = (total % 3600) / 60
