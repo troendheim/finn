@@ -1,0 +1,44 @@
+name: Finn
+options:
+  bundleIdPrefix: com.finn
+  deploymentTarget:
+    tvOS: "17.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+packages:
+  JellyfinSDK:
+    url: https://github.com/jellyfin/jellyfin-sdk-swift
+    from: "0.6.0"
+
+targets:
+  Finn:
+    type: application
+    platform: tvOS
+    sources:
+      - path: Finn
+    dependencies:
+      - package: JellyfinSDK
+        product: JellyfinAPI
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.finn.app
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: true
+        SWIFT_VERSION: "5.9"
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: Finn/Info.plist
+      properties:
+        CFBundleName: Finn
+        CFBundleDisplayName: Finn
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundlePackageType: APPL
+        CFBundleExecutable: $(EXECUTABLE_NAME)
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
