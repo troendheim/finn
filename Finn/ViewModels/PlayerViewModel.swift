@@ -185,7 +185,7 @@ final class PlayerViewModel {
             startProgressReporting()
 
         } catch {
-            self.error = "Failed to start playback"
+            self.error = "Failed to start playback: \(error.localizedDescription)"
             isLoading = false
         }
     }
@@ -690,7 +690,7 @@ final class PlayerViewModel {
             startProgressReporting()
 
         } catch {
-            self.error = "Failed to restart playback"
+            self.error = "Failed to restart playback: \(error.localizedDescription)"
             isLoading = false
         }
     }
