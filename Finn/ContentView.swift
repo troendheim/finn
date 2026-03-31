@@ -4,11 +4,24 @@ struct ContentView: View {
     @State private var jellyfinService = JellyfinService()
     @State private var navigationPath = NavigationPath()
     @State private var homeViewModel: HomeViewModel?
+    @State private var loginViewModel: LoginViewModel?
+    @State private var serverConnectViewModel: ServerConnectViewModel?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             rootView
                 .task { await jellyfinService.validateSession() }
+                .onChange(of: jellyfinService.isAuthenticated) { _, isAuthenticated in
+                    if !isAuthenticated {
+                        homeViewModel = nil
+                    }
+                }
+                .onChange(of: jellyfinService.serverURL) { _, serverURL in
+                    if serverURL == nil {
+                        loginViewModel = nil
+                        homeViewModel = nil
+                    }
+                }
                 .navigationDestination(for: AppDestination.self) { destination in
                     switch destination {
                     case .movieDetail(let itemID):
@@ -64,12 +77,22 @@ struct ContentView: View {
             )
         } else if jellyfinService.serverURL != nil {
             LoginView(
-                viewModel: LoginViewModel(jellyfinService: jellyfinService),
+                viewModel: {
+                    if loginViewModel == nil {
+                        loginViewModel = LoginViewModel(jellyfinService: jellyfinService)
+                    }
+                    return loginViewModel!
+                }(),
                 imageService: jellyfinService.imageService
             )
         } else {
             ServerConnectView(
-                viewModel: ServerConnectViewModel(jellyfinService: jellyfinService)
+                viewModel: {
+                    if serverConnectViewModel == nil {
+                        serverConnectViewModel = ServerConnectViewModel(jellyfinService: jellyfinService)
+                    }
+                    return serverConnectViewModel!
+                }()
             )
         }
     }
