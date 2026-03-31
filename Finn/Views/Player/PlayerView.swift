@@ -212,6 +212,39 @@ struct PlayerView: View {
                     }
                 }
         )
+        .onKeyPress(.escape) {
+            if viewModel.isSeekPreviewing {
+                viewModel.cancelSeekPreview()
+            } else if viewModel.isPickerVisible {
+                viewModel.isPickerVisible = false
+            } else if viewModel.isControlsVisible {
+                viewModel.isControlsVisible = false
+            } else {
+                dismiss()
+            }
+            return .handled
+        }
+        .onKeyPress(.space) {
+            if viewModel.isSeekPreviewing {
+                viewModel.commitSeek()
+            } else {
+                viewModel.togglePlayPause()
+            }
+            viewModel.showControlsIfHidden()
+            return .handled
+        }
+        .onKeyPress(.leftArrow) {
+            viewModel.skipBackward()
+            viewModel.showControlsIfHidden()
+            viewModel.resetControlsTimer()
+            return .handled
+        }
+        .onKeyPress(.rightArrow) {
+            viewModel.skipForward()
+            viewModel.showControlsIfHidden()
+            viewModel.resetControlsTimer()
+            return .handled
+        }
         #endif
     }
 
