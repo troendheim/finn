@@ -1,6 +1,54 @@
 import SwiftUI
 import AVKit
+import AVFoundation
 import JellyfinAPI
+
+/// Renders only the video layer without any system playback controls.
+/// This avoids the duplicate progress bar that SwiftUI's `VideoPlayer` adds.
+#if os(tvOS)
+private struct AVPlayerLayerView: UIViewRepresentable {
+    let player: AVPlayer
+
+    func makeUIView(context: Context) -> UIView {
+        let view = PlayerUIView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        view.backgroundColor = .black
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        (uiView as? PlayerUIView)?.playerLayer.player = player
+    }
+
+    private class PlayerUIView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+}
+#elseif os(macOS)
+private struct AVPlayerLayerView: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> NSView {
+        let view = PlayerNSView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        view.wantsLayer = true
+        view.layer?.backgroundColor = NSColor.black.cgColor
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? PlayerNSView)?.playerLayer.player = player
+    }
+
+    private class PlayerNSView: NSView {
+        override func makeBackingLayer() -> CALayer { AVPlayerLayer() }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+    }
+}
+#endif
 
 struct PlayerView: View {
     @Bindable var viewModel: PlayerViewModel
@@ -10,13 +58,35 @@ struct PlayerView: View {
         ZStack {
             // Video layer
             if let player = viewModel.player {
-                VideoPlayer(player: player)
+                AVPlayerLayerView(player: player)
                     .ignoresSafeArea()
+                    #if os(macOS)
                     .onTapGesture {
                         viewModel.toggleControls()
                     }
+                    #endif
             } else {
                 Color.black.ignoresSafeArea()
+            }
+
+            // Subtitle overlay
+            if !viewModel.subtitleText.isEmpty {
+                VStack {
+                    Spacer()
+                    Text(viewModel.subtitleText)
+                        .font(.title3)
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 60)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.black.opacity(0.75))
+                        )
+                        .padding(.bottom, viewModel.isControlsVisible ? 160 : 60)
+                }
+                .allowsHitTesting(false)
+                .animation(.easeInOut(duration: 0.15), value: viewModel.subtitleText)
             }
 
             // Loading state
@@ -29,7 +99,7 @@ struct PlayerView: View {
             if let error = viewModel.error {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle")
-                        .font(.system(size: 60))
+                        .font(.title)
                     Text(error)
                         .font(.title3)
                 }
@@ -66,13 +136,20 @@ struct PlayerView: View {
                     onSelectSubtitle: { viewModel.selectSubtitle(index: $0) },
                     onDismiss: { viewModel.isPickerVisible = false }
                 )
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             // Next episode overlay
             if viewModel.showNextEpisodeOverlay, let next = viewModel.nextEpisode {
                 nextEpisodeOverlay(next)
             }
+
+            // Playback complete overlay
+            if viewModel.isPlaybackComplete {
+                playbackCompleteOverlay
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: viewModel.isPickerVisible)
         .task {
             await viewModel.onAppear()
         }
@@ -80,17 +157,47 @@ struct PlayerView: View {
             Task { await viewModel.onDisappear() }
         }
         #if os(tvOS)
+        .onPlayPauseCommand {
+            if viewModel.isSeekPreviewing {
+                viewModel.commitSeek()
+            } else {
+                viewModel.togglePlayPause()
+            }
+            viewModel.showControlsIfHidden()
+        }
         .onMoveCommand { direction in
+            if viewModel.isPickerVisible {
+                return
+            }
             if direction == .down {
-                viewModel.togglePicker()
+                viewModel.isPickerVisible = true
+            } else if viewModel.isControlsVisible && (direction == .left || direction == .right) {
+                // Swipe-to-scrub: left/right moves seek preview
+                let increment = viewModel.duration * 0.02 // 2% per swipe
+                let delta = direction == .right ? increment : -increment
+                viewModel.updateSeekPreview(delta: delta)
+            } else {
+                viewModel.showControlsIfHidden()
+                viewModel.resetControlsTimer()
+            }
+        }
+        .onExitCommand {
+            if viewModel.isSeekPreviewing {
+                viewModel.cancelSeekPreview()
+            } else if viewModel.isPickerVisible {
+                viewModel.isPickerVisible = false
+            } else if viewModel.isControlsVisible {
+                viewModel.isControlsVisible = false
+            } else {
+                dismiss()
             }
         }
         #else
         .gesture(
             DragGesture(minimumDistance: 50)
                 .onEnded { value in
-                    if value.translation.height > 50 {
-                        viewModel.togglePicker()
+                    if value.translation.height > 50 && !viewModel.isPickerVisible {
+                        viewModel.isPickerVisible = true
                     }
                 }
         )
@@ -137,11 +244,27 @@ struct PlayerView: View {
                     duration: viewModel.duration,
                     isPlaying: viewModel.isPlaying,
                     onPlayPause: { viewModel.togglePlayPause() },
-                    onSkipForward: { viewModel.skipForward() },
-                    onSkipBackward: { viewModel.skipBackward() },
+                    onSkipForward: {
+                        viewModel.skipForward()
+                        viewModel.resetControlsTimer()
+                    },
+                    onSkipBackward: {
+                        viewModel.skipBackward()
+                        viewModel.resetControlsTimer()
+                    },
                     onHoldForward: { viewModel.startContinuousScrub(forward: true) },
                     onHoldBackward: { viewModel.startContinuousScrub(forward: false) },
-                    onHoldRelease: { viewModel.stopContinuousScrub() }
+                    onHoldRelease: {
+                        viewModel.stopContinuousScrub()
+                        viewModel.resetControlsTimer()
+                    },
+                    seekPreviewTime: viewModel.seekPreviewTime,
+                    onSeekPreviewUpdate: { delta in
+                        viewModel.updateSeekPreview(delta: delta)
+                    },
+                    onSeekCommit: {
+                        viewModel.commitSeek()
+                    }
                 )
                 .padding(.horizontal, 120)
                 .padding(.bottom, 60)
@@ -181,6 +304,28 @@ struct PlayerView: View {
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .padding(40)
+            }
+        }
+    }
+
+    // MARK: - Playback Complete Overlay
+
+    private var playbackCompleteOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.6)
+                .ignoresSafeArea()
+
+            VStack(spacing: 20) {
+                Image(systemName: "checkmark.circle")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.secondary)
+                Text("Playback Complete")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                Button("Done") {
+                    dismiss()
+                }
+                .tint(.red)
             }
         }
     }

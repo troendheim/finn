@@ -39,6 +39,11 @@ final class PlayerViewModel {
     // Burn-in subtitle state (requires transcode restart)
     var currentBurnInSubtitleIndex: Int?
 
+    // Seek preview (interactive scrubber)
+    var seekPreviewTime: Double?
+    var isSeekPreviewing: Bool { seekPreviewTime != nil }
+    private var seekCommitTask: Task<Void, Never>?
+
     // MARK: - AVPlayer
 
     private(set) var player: AVPlayer?
@@ -195,6 +200,7 @@ final class PlayerViewModel {
         countdownTask?.cancel()
         scrubTask?.cancel()
         controlsHideTask?.cancel()
+        seekCommitTask?.cancel()
         statusObservation?.invalidate()
         statusObservation = nil
         if let endObservation {
@@ -271,6 +277,51 @@ final class PlayerViewModel {
         guard let player else { return }
         let target = duration * fraction
         player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+    }
+
+    /// Update the seek preview position by a delta (in seconds).
+    func updateSeekPreview(delta: Double) {
+        let current = seekPreviewTime ?? currentTime
+        let target = max(0, min(current + delta, duration))
+        seekPreviewTime = target
+        showControlsIfHidden()
+        resetSeekCommitTimer()
+    }
+
+    /// Set the seek preview to an absolute fraction of duration (0.0-1.0).
+    func setSeekPreview(fraction: Double) {
+        let target = max(0, min(duration * fraction, duration))
+        seekPreviewTime = target
+        showControlsIfHidden()
+        resetSeekCommitTimer()
+    }
+
+    /// Commit the current seek preview position.
+    func commitSeek() {
+        seekCommitTask?.cancel()
+        guard let target = seekPreviewTime, let player else {
+            seekPreviewTime = nil
+            return
+        }
+        player.seek(to: CMTime(seconds: target, preferredTimescale: 600))
+        currentTime = target
+        seekPreviewTime = nil
+        resetControlsTimer()
+    }
+
+    /// Cancel the seek preview without seeking.
+    func cancelSeekPreview() {
+        seekCommitTask?.cancel()
+        seekPreviewTime = nil
+    }
+
+    private func resetSeekCommitTimer() {
+        seekCommitTask?.cancel()
+        seekCommitTask = Task {
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            commitSeek()
+        }
     }
 
     func toggleControls() {
@@ -492,6 +543,8 @@ final class PlayerViewModel {
         showResumeToast = false
         subtitleText = ""
         currentBurnInSubtitleIndex = nil
+        seekPreviewTime = nil
+        seekCommitTask?.cancel()
         showNextEpisodeOverlay = false
         nextEpisodeCountdown = 10
         nextEpisode = nil
