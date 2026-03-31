@@ -212,6 +212,11 @@ final class PlayerViewModel {
         )
 
         // Cleanup
+        teardownPlayer()
+    }
+
+    /// Shared cleanup: cancel tasks, invalidate observers, detach subtitle renderer, nil out player.
+    private func teardownPlayer() {
         progressTimer?.cancel()
         countdownTask?.cancel()
         scrubTask?.cancel()
@@ -232,6 +237,7 @@ final class PlayerViewModel {
         }
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
+            timeObserver = nil
         }
         player?.pause()
         player = nil
@@ -596,28 +602,7 @@ final class PlayerViewModel {
         let wasPaused = !isPlaying
 
         // Tear down current playback
-        progressTimer?.cancel()
-        scrubTask?.cancel()
-        controlsHideTask?.cancel()
-        statusObservation?.invalidate()
-        statusObservation = nil
-        timeControlObservation?.invalidate()
-        timeControlObservation = nil
-        if let endObservation {
-            NotificationCenter.default.removeObserver(endObservation)
-            self.endObservation = nil
-        }
-        subtitleCancellable?.cancel()
-        subtitleCancellable = nil
-        if let currentItem = player?.currentItem {
-            subtitleRenderer.detach(from: currentItem)
-        }
-        if let observer = timeObserver {
-            player?.removeTimeObserver(observer)
-            timeObserver = nil
-        }
-        player?.pause()
-        player = nil
+        teardownPlayer()
 
         // Report stop with current position
         if let streamInfo {
