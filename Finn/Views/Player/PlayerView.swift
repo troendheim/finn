@@ -89,8 +89,8 @@ struct PlayerView: View {
                 .animation(.easeInOut(duration: 0.15), value: viewModel.subtitleText)
             }
 
-            // Loading state
-            if viewModel.isLoading {
+            // Loading / buffering indicator
+            if viewModel.isLoading || viewModel.isBuffering {
                 ProgressView()
                     .scaleEffect(2)
             }
