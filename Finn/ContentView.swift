@@ -3,10 +3,12 @@ import SwiftUI
 struct ContentView: View {
     @State private var jellyfinService = JellyfinService()
     @State private var navigationPath = NavigationPath()
+    @State private var homeViewModel: HomeViewModel?
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             rootView
+                .task { await jellyfinService.validateSession() }
                 .navigationDestination(for: AppDestination.self) { destination in
                     switch destination {
                     case .movieDetail(let itemID):
@@ -51,7 +53,12 @@ struct ContentView: View {
     private var rootView: some View {
         if jellyfinService.isAuthenticated {
             HomeView(
-                viewModel: HomeViewModel(jellyfinService: jellyfinService),
+                viewModel: {
+                    if homeViewModel == nil {
+                        homeViewModel = HomeViewModel(jellyfinService: jellyfinService)
+                    }
+                    return homeViewModel!
+                }(),
                 imageService: jellyfinService.imageService,
                 navigationPath: $navigationPath
             )
