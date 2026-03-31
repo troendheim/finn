@@ -17,6 +17,7 @@ final class ServerConnectViewModel {
     }
 
     func connect() async {
+        guard !isConnecting else { return }
         let trimmed = serverURLText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             error = "Please enter a server URL"
