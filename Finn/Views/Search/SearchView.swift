@@ -23,6 +23,7 @@ struct SearchView: View {
             .liquidGlass(in: 12, isInteractive: true)
             .padding(.horizontal, 60)
             .padding(.top, 30)
+            .focusSection()
 
             // Results
             if viewModel.isSearching {
@@ -50,6 +51,7 @@ struct SearchView: View {
                     .padding(.horizontal, 60)
                     .padding(.top, 20)
                 }
+                .focusSection()
             }
         }
     }
