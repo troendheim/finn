@@ -23,6 +23,10 @@ struct ServerConnectView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .frame(maxWidth: 600)
                     .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    #if os(tvOS)
+                    .keyboardType(.URL)
+                    #endif
                     .onSubmit {
                         Task { await viewModel.connect() }
                     }
