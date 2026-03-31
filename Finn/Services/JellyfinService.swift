@@ -20,6 +20,7 @@ final class JellyfinService {
     private(set) var client: JellyfinClient?
     private(set) var currentUserID: String?
     private(set) var isAuthenticated = false
+    private(set) var currentUserName: String?
 
     private(set) var serverURL: URL? {
         didSet { _imageService = serverURL.map { ImageService(serverURL: $0) } }
@@ -33,6 +34,7 @@ final class JellyfinService {
     private enum Keys {
         static let serverURL = "finn.serverURL"
         static let userID = "finn.userID"
+        static let userName = "finn.userName"
         static let accessToken = "finn.accessToken"
         static let preferredAudioLanguage = "finn.preferredAudioLanguage"
         static let preferredSubtitleLanguage = "finn.preferredSubtitleLanguage"
@@ -87,9 +89,13 @@ final class JellyfinService {
 
         self.currentUserID = userID
         self.isAuthenticated = true
+        self.currentUserName = result.user?.name
 
         // Persist
         UserDefaults.standard.set(userID, forKey: Keys.userID)
+        if let name = result.user?.name {
+            UserDefaults.standard.set(name, forKey: Keys.userName)
+        }
         KeychainHelper.save(key: Keys.accessToken, value: token)
     }
 
@@ -97,9 +103,11 @@ final class JellyfinService {
     func signOut() async {
         try? await client?.signOut()
         self.currentUserID = nil
+        self.currentUserName = nil
         self.isAuthenticated = false
         KeychainHelper.delete(key: Keys.accessToken)
         UserDefaults.standard.removeObject(forKey: Keys.userID)
+        UserDefaults.standard.removeObject(forKey: Keys.userName)
     }
 
     /// Disconnect from the server entirely, clearing all saved state.
@@ -439,6 +447,7 @@ final class JellyfinService {
         self.serverURL = url
         self.currentUserID = userID
         self.isAuthenticated = true
+        self.currentUserName = UserDefaults.standard.string(forKey: Keys.userName)
     }
 
     /// Validates the restored session by fetching the current user.

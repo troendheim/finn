@@ -13,10 +13,39 @@ final class HomeViewModel {
     var isLoading = false
     var error: String?
 
-    private let jellyfinService: JellyfinService
+    let jellyfinService: JellyfinService
+
+    /// Display-friendly server URL for the settings overlay.
+    var serverURLDisplay: String {
+        jellyfinService.serverURL?.absoluteString ?? "Unknown"
+    }
+
+    /// Display-friendly current user identifier.
+    var currentUserDisplay: String {
+        jellyfinService.currentUserName ?? jellyfinService.currentUserID ?? "Unknown"
+    }
+
+    /// Whether every content section is empty (and we're not still loading).
+    var isLibraryEmpty: Bool {
+        !isLoading
+            && continueWatching.isEmpty
+            && nextUp.isEmpty
+            && latestMedia.isEmpty
+            && genreRows.isEmpty
+    }
 
     init(jellyfinService: JellyfinService) {
         self.jellyfinService = jellyfinService
+    }
+
+    // MARK: - Account Actions
+
+    func signOut() async {
+        await jellyfinService.signOut()
+    }
+
+    func disconnect() async {
+        await jellyfinService.disconnect()
     }
 
     // MARK: - Loading
