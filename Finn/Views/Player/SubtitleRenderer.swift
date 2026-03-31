@@ -6,7 +6,7 @@ import Combine
 ///
 /// AVPlayerLayer (unlike AVPlayerViewController) does not render subtitles
 /// on its own, so we capture legible output and draw it in a SwiftUI overlay.
-final class SubtitleRenderer: NSObject, AVPlayerItemLegibleOutputPushDelegate {
+final class SubtitleRenderer: NSObject, AVPlayerItemLegibleOutputPushDelegate, @unchecked Sendable {
     /// The current subtitle text to display. Empty string means no subtitle visible.
     @Published var currentText: String = ""
 

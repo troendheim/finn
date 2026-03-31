@@ -1,7 +1,7 @@
 import Foundation
 import JellyfinAPI
 
-final class ImageService {
+final class ImageService: Sendable {
     private let serverURL: URL
 
     init(serverURL: URL) {
