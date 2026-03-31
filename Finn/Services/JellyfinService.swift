@@ -148,7 +148,8 @@ final class JellyfinService {
             enableImages: true,
             imageTypeLimit: 1,
             enableImageTypes: [.primary, .backdrop, .thumb],
-            enableUserData: true
+            enableUserData: true,
+            enableResumable: false
         )
         let result = try await client.send(Paths.getNextUp(parameters: params)).value
         return result.items ?? []
