@@ -6,6 +6,10 @@ struct SearchView: View {
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
 
+    private let columns = [
+        GridItem(.adaptive(minimum: 220, maximum: 240), spacing: 40)
+    ]
+
     var body: some View {
         VStack(spacing: 0) {
             // Search input
@@ -18,6 +22,17 @@ struct SearchView: View {
                     .onChange(of: viewModel.query) {
                         viewModel.onQueryChanged()
                     }
+                if !viewModel.query.isEmpty {
+                    Button {
+                        viewModel.query = ""
+                        viewModel.results = []
+                        viewModel.hasSearched = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding()
             .liquidGlass(in: 12, isInteractive: true)
@@ -27,106 +42,55 @@ struct SearchView: View {
 
             // Results
             if viewModel.isSearching {
+                Spacer()
                 ProgressView()
-                    .padding(.top, 60)
                 Spacer()
             } else if viewModel.results.isEmpty && viewModel.hasSearched {
-                Text("No results found")
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 60)
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                    Text("No results found")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text("Try a different search term")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                }
+                Spacer()
+            } else if viewModel.results.isEmpty && !viewModel.hasSearched {
+                Spacer()
+                VStack(spacing: 16) {
+                    Image(systemName: "tv")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.secondary)
+                    Text("Search your library")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                    Text("Find movies and series")
+                        .font(.callout)
+                        .foregroundStyle(.tertiary)
+                }
                 Spacer()
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 0) {
+                    LazyVGrid(columns: columns, spacing: 40) {
                         ForEach(viewModel.results, id: \.id) { item in
                             Button {
                                 navigateToDetail(item)
                             } label: {
-                                searchResultRow(item)
+                                PosterCard(item: item, imageService: imageService)
                             }
                             .tvCardButton()
                         }
                     }
                     .padding(.horizontal, 60)
-                    .padding(.top, 20)
+                    .padding(.vertical, 30)
                 }
                 .focusSection()
             }
         }
-    }
-
-    @ViewBuilder
-    private func searchResultRow(_ item: BaseItemDto) -> some View {
-        HStack(spacing: 20) {
-            // Poster thumbnail
-            if let id = item.id, let url = imageService?.posterURL(itemID: id, maxWidth: 80) {
-                AsyncImage(url: url) { image in
-                    image.resizable().scaledToFill()
-                } placeholder: {
-                    Rectangle().fill(.gray.opacity(0.2))
-                }
-                .frame(width: 60, height: 90)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-
-            // Info
-            VStack(alignment: .leading, spacing: 4) {
-                // Title with type badge
-                HStack(spacing: 10) {
-                    Text(item.name ?? "")
-                        .font(.body)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-
-                    typeBadge(item)
-                }
-
-                // Year and runtime/season count
-                metadataText(item)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-
-                // Brief description
-                if let overview = item.overview {
-                    Text(overview)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.vertical, 12)
-    }
-
-    @ViewBuilder
-    private func typeBadge(_ item: BaseItemDto) -> some View {
-        let label: String = switch item.type {
-        case .series: "Series"
-        case .episode: "Episode"
-        default: "Movie"
-        }
-        Text(label)
-            .font(.callout)
-            .fontWeight(.medium)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .liquidGlass(in: 4)
-    }
-
-    private func metadataText(_ item: BaseItemDto) -> Text {
-        var parts: [String] = []
-        if let year = item.yearDisplay { parts.append(year) }
-        if item.type == .series {
-            if let count = item.childCount {
-                parts.append("\(count) Season\(count == 1 ? "" : "s")")
-            }
-        } else {
-            if let runtime = item.runtimeDisplay { parts.append(runtime) }
-        }
-        return Text(parts.joined(separator: " · "))
     }
 
     private func navigateToDetail(_ item: BaseItemDto) {
