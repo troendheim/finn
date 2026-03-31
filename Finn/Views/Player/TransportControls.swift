@@ -39,7 +39,7 @@ struct TransportControls: View {
                 ZStack(alignment: .leading) {
                     // Track background
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(.white.opacity(0.3))
+                        .fill(.white.opacity(0.4))
                         .frame(height: 8)
 
                     // Filled portion (current playback position)
@@ -60,6 +60,7 @@ struct TransportControls: View {
                     // Current playhead
                     Circle()
                         .fill(.white)
+                        .shadow(color: .black.opacity(0.5), radius: 3, y: 1)
                         .frame(width: 18, height: 18)
                         .offset(x: geo.size.width * progress - 9)
 
@@ -96,7 +97,7 @@ struct TransportControls: View {
             }
             .frame(height: 18)
 
-            // Transport icons
+            // Transport buttons
             HStack(spacing: 60) {
                 // Skip backward (tap: -10s, hold: continuous rewind)
                 Button {
@@ -105,10 +106,9 @@ struct TransportControls: View {
                     Image(systemName: "gobackward.10")
                         .font(.system(size: 36))
                 }
-                .buttonStyle(.plain)
+                .glassButtonStyle()
                 .focused($focusedButton, equals: .skipBack)
-                .scaleEffect(focusedButton == .skipBack ? 1.2 : 1.0)
-                .opacity(focusedButton == .skipBack ? 1.0 : 0.7)
+                .scaleEffect(focusedButton == .skipBack ? 1.1 : 1.0)
                 .animation(.easeInOut(duration: 0.15), value: focusedButton)
                 .accessibilityLabel("Skip backward 10 seconds")
                 .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
@@ -130,10 +130,9 @@ struct TransportControls: View {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 44))
                 }
-                .buttonStyle(.plain)
+                .glassButtonStyle()
                 .focused($focusedButton, equals: .playPause)
-                .scaleEffect(focusedButton == .playPause ? 1.2 : 1.0)
-                .opacity(focusedButton == .playPause ? 1.0 : 0.7)
+                .scaleEffect(focusedButton == .playPause ? 1.1 : 1.0)
                 .animation(.easeInOut(duration: 0.15), value: focusedButton)
                 .accessibilityLabel(isPlaying ? "Pause" : "Play")
 
@@ -144,10 +143,9 @@ struct TransportControls: View {
                     Image(systemName: "goforward.10")
                         .font(.system(size: 36))
                 }
-                .buttonStyle(.plain)
+                .glassButtonStyle()
                 .focused($focusedButton, equals: .skipForward)
-                .scaleEffect(focusedButton == .skipForward ? 1.2 : 1.0)
-                .opacity(focusedButton == .skipForward ? 1.0 : 0.7)
+                .scaleEffect(focusedButton == .skipForward ? 1.1 : 1.0)
                 .animation(.easeInOut(duration: 0.15), value: focusedButton)
                 .accessibilityLabel("Skip forward 10 seconds")
                 .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
@@ -162,6 +160,9 @@ struct TransportControls: View {
                     // Long press recognized — scrub is already running via pressing callback
                 })
             }
+            .liquidGlassContainer(spacing: 16)
         }
+        .padding(24)
+        .liquidGlass(in: 20)
     }
 }
