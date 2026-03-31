@@ -7,6 +7,7 @@ struct HomeView: View {
     @Binding var navigationPath: NavigationPath
     @State private var showSettings = false
     @State private var hasAppeared = false
+    @Namespace private var contentNamespace
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -57,6 +58,7 @@ struct HomeView: View {
                     ) { item in
                         LandscapeCard(item: item, imageService: imageService)
                     }
+                    .prefersDefaultFocus(in: contentNamespace)
 
                     // Next Up
                     ContentRow(
@@ -131,6 +133,7 @@ struct HomeView: View {
         .refreshable {
             await viewModel.forceRefresh()
         }
+        .focusScope(contentNamespace)
         .sheet(isPresented: $showSettings) {
             settingsOverlay
         }
