@@ -135,11 +135,15 @@ final class PlaybackService {
         guard let mediaSourceID = mediaSource.id else { throw FinnError.noMediaSource }
 
         // Check for direct play compatibility
-        let container = mediaSource.container?.lowercased() ?? ""
-        let avPlayerContainers = ["mp4", "m4v", "mov"]
+        let containerFormats = Set(
+            (mediaSource.container?.lowercased() ?? "")
+                .split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+        )
+        let avPlayerContainers: Set<String> = ["mp4", "m4v", "mov"]
 
         if mediaSource.isSupportsDirectPlay == true,
-           avPlayerContainers.contains(where: { container.contains($0) }) {
+           !containerFormats.isDisjoint(with: avPlayerContainers) {
             // Build direct stream URL
             guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
                 throw FinnError.noMediaSource
@@ -157,7 +161,7 @@ final class PlaybackService {
 
         // Fall back to direct stream (only for containers AVPlayer can handle)
         if mediaSource.isSupportsDirectStream == true,
-           avPlayerContainers.contains(where: { container.contains($0) }) {
+           !containerFormats.isDisjoint(with: avPlayerContainers) {
             guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
                 throw FinnError.noMediaSource
             }
