@@ -6,6 +6,7 @@ struct MovieDetailView: View {
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
     @State private var isOverviewExpanded = false
+    @State private var errorDismissTask: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
@@ -151,7 +152,8 @@ struct MovieDetailView: View {
                     .padding(.top, 40)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onAppear {
-                        Task {
+                        errorDismissTask?.cancel()
+                        errorDismissTask = Task {
                             try? await Task.sleep(for: .seconds(3))
                             withAnimation { viewModel.actionError = nil }
                         }

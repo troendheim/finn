@@ -5,6 +5,7 @@ struct SeriesDetailView: View {
     @Bindable var viewModel: SeriesDetailViewModel
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
+    @State private var errorDismissTask: Task<Void, Never>?
 
     var body: some View {
         ScrollView {
@@ -58,7 +59,8 @@ struct SeriesDetailView: View {
                     .padding(.top, 40)
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .onAppear {
-                        Task {
+                        errorDismissTask?.cancel()
+                        errorDismissTask = Task {
                             try? await Task.sleep(for: .seconds(3))
                             withAnimation { viewModel.actionError = nil }
                         }
