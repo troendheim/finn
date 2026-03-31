@@ -132,6 +132,7 @@ final class PlaybackService {
         serverURL: URL?
     ) throws -> (URL, PlayMethod) {
         guard let serverURL else { throw FinnError.notConnected }
+        guard let mediaSourceID = mediaSource.id else { throw FinnError.noMediaSource }
 
         // Check for direct play compatibility
         let container = mediaSource.container?.lowercased() ?? ""
@@ -143,7 +144,7 @@ final class PlaybackService {
             guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
                 throw FinnError.noMediaSource
             }
-            components.path += "/Videos/\(mediaSource.id ?? "")/stream"
+            components.path += "/Videos/\(mediaSourceID)/stream"
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
@@ -160,7 +161,7 @@ final class PlaybackService {
             guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
                 throw FinnError.noMediaSource
             }
-            components.path += "/Videos/\(mediaSource.id ?? "")/stream"
+            components.path += "/Videos/\(mediaSourceID)/stream"
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
