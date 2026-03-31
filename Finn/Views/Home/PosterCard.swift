@@ -13,7 +13,7 @@ struct PosterCard: View {
         ZStack(alignment: .bottom) {
             // Poster image
             if let id = item.id, let url = imageService?.posterURL(itemID: id, maxWidth: Int(cardWidth)) {
-                AsyncImage(url: url) { image in
+                CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Rectangle().fill(.gray.opacity(0.2))

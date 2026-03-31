@@ -10,7 +10,7 @@ struct HomeView: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 40) {
+            LazyVStack(alignment: .leading, spacing: 40) {
                 // Header with search and settings buttons
                 HStack {
                     Text("Finn")
@@ -128,7 +128,7 @@ struct HomeView: View {
             }
         }
         .refreshable {
-            await viewModel.refresh()
+            await viewModel.forceRefresh()
         }
         .sheet(isPresented: $showSettings) {
             settingsOverlay

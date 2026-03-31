@@ -17,6 +17,14 @@ final class HomeViewModel {
 
     let jellyfinService: JellyfinService
 
+    /// Timestamp of the last successful full load. Used by `refresh()` to avoid
+    /// re-fetching all sections when data is still fresh.
+    private var lastLoadTime: Date?
+
+    /// Minimum interval (seconds) between automatic refreshes triggered by
+    /// navigation back. Pull-to-refresh always forces a full reload.
+    private let refreshInterval: TimeInterval = 30
+
     /// Display-friendly server URL for the settings overlay.
     var serverURLDisplay: String {
         jellyfinService.serverURL?.absoluteString ?? "Unknown"
@@ -57,6 +65,7 @@ final class HomeViewModel {
     // MARK: - Loading
 
     func loadAll() async {
+        guard !isLoading else { return }
         isLoading = true
         error = nil
 
@@ -78,10 +87,37 @@ final class HomeViewModel {
         await loadGenreRows()
         isLoadingGenres = false
         hasLoaded = true
+        lastLoadTime = Date()
     }
 
+    /// Refresh data when returning from navigation. Only re-fetches the
+    /// time-sensitive rows (Continue Watching, Next Up) if data was loaded
+    /// recently. Forces a full reload when data is stale.
     func refresh() async {
+        if let lastLoadTime, Date().timeIntervalSince(lastLoadTime) < refreshInterval {
+            // Data is fresh — only refresh playback-sensitive rows
+            await refreshPlaybackRows()
+        } else {
+            await loadAll()
+        }
+    }
+
+    /// Force a full reload (used by pull-to-refresh).
+    func forceRefresh() async {
+        lastLoadTime = nil
         await loadAll()
+    }
+
+    /// Lightweight refresh that only re-fetches rows affected by playback
+    /// (Continue Watching and Next Up). Genre rows and Recently Added are
+    /// left untouched since they rarely change mid-session.
+    private func refreshPlaybackRows() async {
+        async let resumeResult: [BaseItemDto] = loadSection { try await jellyfinService.getResumeItems() }
+        async let nextUpResult: [BaseItemDto] = loadSection { try await jellyfinService.getNextUp() }
+
+        let results = await (resumeResult, nextUpResult)
+        continueWatching = results.0
+        nextUp = results.1
     }
 
     // MARK: - Private

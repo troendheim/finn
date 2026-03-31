@@ -13,7 +13,7 @@ struct LandscapeCard: View {
         ZStack(alignment: .bottom) {
             // Background image — try thumb, backdrop, then primary with series fallback
             if let url = imageService?.landscapeURL(item: item, maxWidth: Int(cardWidth)) {
-                AsyncImage(url: url) { image in
+                CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                 } placeholder: {
                     Rectangle().fill(.gray.opacity(0.2))
@@ -51,12 +51,10 @@ struct LandscapeCard: View {
 
                 // Progress bar at very bottom, below the glass bar
                 if item.playbackProgress > 0 {
-                    GeometryReader { geo in
-                        Rectangle()
-                            .fill(.red)
-                            .frame(width: geo.size.width * item.playbackProgress, height: 4)
-                    }
-                    .frame(height: 4)
+                    Rectangle()
+                        .fill(.red)
+                        .frame(width: cardWidth * item.playbackProgress, height: 4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }

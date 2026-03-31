@@ -208,7 +208,7 @@ final class JellyfinService {
             isRecursive: true,
             fields: [.overview],
             includeItemTypes: [.movie, .series],
-            sortBy: [.random],
+            sortBy: [.sortName],
             enableUserData: true,
             imageTypeLimit: 1,
             enableImageTypes: [.primary, .backdrop],
