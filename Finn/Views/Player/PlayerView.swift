@@ -185,11 +185,22 @@ struct PlayerView: View {
             }
             if direction == .down {
                 viewModel.isPickerVisible = true
-            } else if viewModel.isControlsVisible && (direction == .left || direction == .right) {
-                // Swipe-to-scrub: left/right moves seek preview
-                let increment = viewModel.duration * 0.02 // 2% per swipe
-                let delta = direction == .right ? increment : -increment
-                viewModel.updateSeekPreview(delta: delta)
+            } else if direction == .left || direction == .right {
+                if viewModel.isControlsVisible {
+                    // Swipe-to-scrub: left/right moves seek preview
+                    let increment = viewModel.duration * 0.02 // 2% per swipe
+                    let delta = direction == .right ? increment : -increment
+                    viewModel.updateSeekPreview(delta: delta)
+                } else {
+                    // Skip forward/backward 10s when controls are hidden
+                    if direction == .right {
+                        viewModel.skipForward()
+                    } else {
+                        viewModel.skipBackward()
+                    }
+                    viewModel.showControlsIfHidden()
+                    viewModel.resetControlsTimer()
+                }
             } else {
                 viewModel.showControlsIfHidden()
                 viewModel.resetControlsTimer()
