@@ -89,13 +89,7 @@ struct PlayerView: View {
                 .animation(.easeInOut(duration: 0.15), value: viewModel.subtitleText)
             }
 
-            // Loading / buffering indicator
-            if viewModel.isLoading || viewModel.isBuffering {
-                ProgressView()
-                    .scaleEffect(2)
-            }
-
-            // Error state with retry
+            // Error state takes priority over buffering/loading
             if let error = viewModel.error {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle")
@@ -114,6 +108,10 @@ struct PlayerView: View {
                         }
                     }
                 }
+            } else if viewModel.isLoading || viewModel.isBuffering {
+                // Loading / buffering indicator (only when no error)
+                ProgressView()
+                    .scaleEffect(2)
             }
 
             // Controls overlay
