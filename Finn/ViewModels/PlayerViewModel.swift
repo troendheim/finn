@@ -322,6 +322,14 @@ final class PlayerViewModel {
         seekPreviewTime = nil
     }
 
+    /// Retry playback after an error.
+    func retryPlayback() {
+        error = nil
+        Task {
+            await onAppear()
+        }
+    }
+
     private func resetSeekCommitTimer() {
         seekCommitTask?.cancel()
         seekCommitTask = Task {

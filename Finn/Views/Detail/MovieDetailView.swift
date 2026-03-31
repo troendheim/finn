@@ -5,6 +5,7 @@ struct MovieDetailView: View {
     @Bindable var viewModel: MovieDetailViewModel
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
+    @State private var isOverviewExpanded = false
 
     var body: some View {
         ScrollView {
@@ -24,7 +25,8 @@ struct MovieDetailView: View {
                             Spacer().frame(height: 300)
 
                             Text(item.name ?? "")
-                                .font(.system(size: 52, weight: .bold))
+                                .font(.title)
+                                .fontWeight(.bold)
 
                             Text(viewModel.metadataLine)
                                 .font(.title3)
@@ -51,7 +53,7 @@ struct MovieDetailView: View {
                                     navigationPath.append(AppDestination.player(itemID: viewModel.itemID))
                                 } label: {
                                     HStack {
-                                        Image(systemName: item.hasProgress ? "play.fill" : "play.fill")
+                                        Image(systemName: item.hasProgress ? "play.circle.fill" : "play.fill")
                                         Text(viewModel.playButtonTitle)
                                     }
                                     .padding(.horizontal, 30)
@@ -65,6 +67,7 @@ struct MovieDetailView: View {
                                     Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
                                         .font(.title3)
                                 }
+                                .accessibilityLabel(viewModel.isFavorite ? "Remove from favorites" : "Add to favorites")
                             }
 
                             // Progress bar for resume
@@ -75,11 +78,26 @@ struct MovieDetailView: View {
                             }
 
                             if let overview = item.overview {
-                                Text(overview)
-                                    .font(.body)
-                                    .lineLimit(4)
-                                    .foregroundStyle(.secondary)
-                                    .frame(maxWidth: 700)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(overview)
+                                        .font(.body)
+                                        .lineLimit(isOverviewExpanded ? nil : 4)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: 700, alignment: .leading)
+
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.25)) {
+                                            isOverviewExpanded.toggle()
+                                        }
+                                    } label: {
+                                        Text(isOverviewExpanded ? "Show Less" : "Show More")
+                                            .font(.callout)
+                                            .foregroundStyle(.red)
+                                    }
+                                    #if os(tvOS)
+                                    .buttonStyle(.plain)
+                                    #endif
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -109,14 +127,38 @@ struct MovieDetailView: View {
                     .padding(.horizontal, 60)
                 }
             } else if let error = viewModel.error {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .padding(.top, 200)
+                VStack(spacing: 16) {
+                    Text(error)
+                        .foregroundStyle(.red)
+                    Button("Retry") {
+                        Task { await viewModel.loadDetail() }
+                    }
+                }
+                .padding(.top, 200)
             }
         }
         .task {
             await viewModel.loadDetail()
         }
+        .overlay(alignment: .top) {
+            if let errorMessage = viewModel.actionError {
+                Text(errorMessage)
+                    .font(.callout)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(.white)
+                    .padding(.top, 40)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onAppear {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3))
+                            withAnimation { viewModel.actionError = nil }
+                        }
+                    }
+            }
+        }
+        .animation(.easeInOut, value: viewModel.actionError)
     }
 
     @ViewBuilder
@@ -149,10 +191,10 @@ struct InfoSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
-                .font(.caption)
+                .font(.callout)
                 .foregroundStyle(.secondary)
             Text(value)
-                .font(.callout)
+                .font(.body)
                 .lineLimit(3)
         }
     }

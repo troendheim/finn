@@ -95,13 +95,24 @@ struct PlayerView: View {
                     .scaleEffect(2)
             }
 
-            // Error state
+            // Error state with retry
             if let error = viewModel.error {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.title)
                     Text(error)
                         .font(.title3)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 40)
+                    HStack(spacing: 20) {
+                        Button("Retry") {
+                            viewModel.retryPlayback()
+                        }
+                        .tint(.red)
+                        Button("Dismiss") {
+                            dismiss()
+                        }
+                    }
                 }
             }
 

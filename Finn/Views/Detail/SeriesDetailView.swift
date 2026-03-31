@@ -34,14 +34,38 @@ struct SeriesDetailView: View {
                     .padding(.top, 30)
                 }
             } else if let error = viewModel.error {
-                Text(error)
-                    .foregroundStyle(.red)
-                    .padding(.top, 200)
+                VStack(spacing: 16) {
+                    Text(error)
+                        .foregroundStyle(.red)
+                    Button("Retry") {
+                        Task { await viewModel.loadDetail() }
+                    }
+                }
+                .padding(.top, 200)
             }
         }
         .task {
             await viewModel.loadDetail()
         }
+        .overlay(alignment: .top) {
+            if let errorMessage = viewModel.actionError {
+                Text(errorMessage)
+                    .font(.callout)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+                    .foregroundStyle(.white)
+                    .padding(.top, 40)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .onAppear {
+                        Task {
+                            try? await Task.sleep(for: .seconds(3))
+                            withAnimation { viewModel.actionError = nil }
+                        }
+                    }
+            }
+        }
+        .animation(.easeInOut, value: viewModel.actionError)
     }
 
     // MARK: - Header
@@ -69,7 +93,8 @@ struct SeriesDetailView: View {
 
             VStack(alignment: .leading, spacing: 16) {
                 Text(item.name ?? "")
-                    .font(.system(size: 48, weight: .bold))
+                    .font(.title)
+                    .fontWeight(.bold)
 
                 Text(viewModel.metadataLine)
                     .font(.title3)
@@ -104,6 +129,7 @@ struct SeriesDetailView: View {
                         Image(systemName: viewModel.isFavorite ? "heart.fill" : "heart")
                             .font(.title3)
                     }
+                    .accessibilityLabel(viewModel.isFavorite ? "Remove from favorites" : "Add to favorites")
                 }
             }
             .padding(.horizontal, 60)
@@ -130,7 +156,7 @@ struct SeriesDetailView: View {
                                 .frame(height: 3)
                         }
                     }
-                    .buttonStyle(.plain)
+                    .tvCardButton()
                 }
             }
         }
@@ -145,14 +171,30 @@ struct SeriesDetailView: View {
                     .padding(.top, 40)
             } else {
                 ForEach(viewModel.episodes, id: \.id) { episode in
-                    Button {
-                        if let id = episode.id {
-                            navigationPath.append(AppDestination.player(itemID: id))
+                    HStack(spacing: 0) {
+                        // Main episode button — plays the episode
+                        Button {
+                            if let id = episode.id {
+                                navigationPath.append(AppDestination.player(itemID: id))
+                            }
+                        } label: {
+                            episodeRow(episode)
                         }
-                    } label: {
-                        episodeRow(episode)
+                        .tvCardButton()
+
+                        // Mark played/unplayed toggle button
+                        Button {
+                            Task { await viewModel.togglePlayed(episode: episode) }
+                        } label: {
+                            Image(systemName: episode.isWatched ? "checkmark.circle.fill" : "circle")
+                                .font(.title3)
+                                .foregroundStyle(episode.isWatched ? .green : .secondary)
+                                .frame(width: 60, height: 60)
+                                .contentShape(Rectangle())
+                        }
+                        .tvCardButton()
+                        .accessibilityLabel(episode.isWatched ? "Mark as unwatched" : "Mark as watched")
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -182,9 +224,9 @@ struct SeriesDetailView: View {
                             GeometryReader { geo in
                                 Rectangle()
                                     .fill(.red)
-                                    .frame(width: geo.size.width * episode.playbackProgress, height: 3)
+                                    .frame(width: geo.size.width * episode.playbackProgress, height: 5)
                             }
-                            .frame(height: 3)
+                            .frame(height: 5)
                         }
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     }
@@ -195,28 +237,22 @@ struct SeriesDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("E\(episode.indexNumber ?? 0)")
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(.secondary)
                     Text(episode.name ?? "")
-                        .font(.callout)
+                        .font(.body)
                         .fontWeight(.semibold)
                         .lineLimit(1)
                 }
 
                 if let runtime = episode.runtimeDisplay {
                     Text(runtime)
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }
 
             Spacer()
-
-            // Watch status
-            if episode.isWatched {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.secondary)
-            }
         }
         .opacity(episode.isWatched ? 0.5 : 1.0)
         .padding(.vertical, 8)

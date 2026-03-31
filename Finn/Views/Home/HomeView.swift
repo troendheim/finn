@@ -5,16 +5,26 @@ struct HomeView: View {
     @Bindable var viewModel: HomeViewModel
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
+    @State private var showSettings = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 40) {
-                // Header with search button
+                // Header with search and settings buttons
                 HStack {
                     Text("Finn")
-                        .font(.system(size: 48, weight: .bold))
+                        .font(.title)
+                        .fontWeight(.bold)
 
                     Spacer()
+
+                    Button {
+                        showSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                            .font(.title2)
+                    }
+                    .accessibilityLabel("Settings")
 
                     Button {
                         navigationPath.append(AppDestination.search)
@@ -22,6 +32,7 @@ struct HomeView: View {
                         Image(systemName: "magnifyingglass")
                             .font(.title2)
                     }
+                    .accessibilityLabel("Search")
                 }
                 .padding(.horizontal, 60)
                 .padding(.top, 20)
@@ -68,13 +79,34 @@ struct HomeView: View {
                             PosterCard(item: item, imageService: imageService)
                         }
                     }
+
+                    // Empty state
+                    if viewModel.isLibraryEmpty {
+                        VStack(spacing: 16) {
+                            Image(systemName: "tv")
+                                .font(.system(size: 60))
+                                .foregroundStyle(.secondary)
+                            Text("Your library is empty")
+                                .font(.title3)
+                            Text("Add some media to your Jellyfin server to get started")
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 80)
+                    }
                 }
 
                 if let error = viewModel.error {
-                    Text(error)
-                        .foregroundStyle(.red)
-                        .frame(maxWidth: .infinity)
-                        .padding()
+                    VStack(spacing: 12) {
+                        Text(error)
+                            .foregroundStyle(.red)
+                        Button("Retry") {
+                            Task { await viewModel.loadAll() }
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
                 }
             }
             .padding(.bottom, 40)
@@ -85,6 +117,60 @@ struct HomeView: View {
         .refreshable {
             await viewModel.refresh()
         }
+        .sheet(isPresented: $showSettings) {
+            settingsOverlay
+        }
+    }
+
+    // MARK: - Settings Overlay
+
+    private var settingsOverlay: some View {
+        VStack(spacing: 24) {
+            Text("Settings")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Server")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(viewModel.serverURLDisplay)
+                    .font(.body)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("User")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(viewModel.currentUserDisplay)
+                    .font(.body)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer()
+
+            Button(role: .destructive) {
+                showSettings = false
+                Task { await viewModel.signOut() }
+            } label: {
+                Text("Sign Out")
+                    .frame(maxWidth: .infinity)
+            }
+
+            Button(role: .destructive) {
+                showSettings = false
+                Task { await viewModel.disconnect() }
+            } label: {
+                Text("Switch Server")
+                    .frame(maxWidth: .infinity)
+            }
+
+            Button("Cancel", role: .cancel) {
+                showSettings = false
+            }
+        }
+        .padding(40)
     }
 
     private func navigateToDetail(_ item: BaseItemDto) {
@@ -95,10 +181,8 @@ struct HomeView: View {
         case .series:
             navigationPath.append(AppDestination.seriesDetail(itemID: id))
         case .episode:
-            // For episodes in Continue Watching / Next Up, navigate to the series
-            if let seriesID = item.seriesID {
-                navigationPath.append(AppDestination.seriesDetail(itemID: seriesID))
-            }
+            // Episodes in Continue Watching / Next Up go straight to the player
+            navigationPath.append(AppDestination.player(itemID: id))
         default:
             break
         }
