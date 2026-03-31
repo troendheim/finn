@@ -43,7 +43,7 @@ struct HomeView: View {
                 .padding(.horizontal, 60)
                 .padding(.top, 20)
 
-                if viewModel.isLoading && viewModel.continueWatching.isEmpty {
+                if !viewModel.hasLoaded && viewModel.continueWatching.isEmpty {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                         .padding(.top, 100)

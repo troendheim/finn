@@ -12,6 +12,7 @@ final class HomeViewModel {
     var genreRows: [(genre: BaseItemDto, items: [BaseItemDto])] = []
     var isLoading = false
     var isLoadingGenres = false
+    private(set) var hasLoaded = false
     var error: String?
 
     let jellyfinService: JellyfinService
@@ -27,8 +28,11 @@ final class HomeViewModel {
     }
 
     /// Whether every content section is empty (and we're not still loading).
+    /// Only evaluates to `true` after the first load has completed so the
+    /// empty-library message never flashes before data has been fetched.
     var isLibraryEmpty: Bool {
-        !isLoading
+        hasLoaded
+            && !isLoading
             && !isLoadingGenres
             && continueWatching.isEmpty
             && nextUp.isEmpty
@@ -73,6 +77,7 @@ final class HomeViewModel {
         isLoadingGenres = true
         await loadGenreRows()
         isLoadingGenres = false
+        hasLoaded = true
     }
 
     func refresh() async {
