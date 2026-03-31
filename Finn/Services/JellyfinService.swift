@@ -5,17 +5,28 @@ import Get
 @MainActor
 @Observable
 final class JellyfinService {
+    // MARK: - Client Constants
+
+    private static let clientName = "Finn"
+    private static let clientVersion = "1.0.0"
+    #if os(tvOS)
+    private static let deviceName = "Apple TV"
+    #elseif os(macOS)
+    private static let deviceName = "Mac"
+    #endif
+
     // MARK: - State
 
     private(set) var client: JellyfinClient?
-    private(set) var serverURL: URL?
     private(set) var currentUserID: String?
     private(set) var isAuthenticated = false
 
-    var imageService: ImageService? {
-        guard let serverURL else { return nil }
-        return ImageService(serverURL: serverURL)
+    private(set) var serverURL: URL? {
+        didSet { _imageService = serverURL.map { ImageService(serverURL: $0) } }
     }
+
+    private var _imageService: ImageService?
+    var imageService: ImageService? { _imageService }
 
     // MARK: - Persistence Keys
 
@@ -38,15 +49,15 @@ final class JellyfinService {
     func connectToServer(url: URL) async throws {
         let config = JellyfinClient.Configuration(
             url: url,
-            client: "Finn",
-            deviceName: "Apple TV",
+            client: Self.clientName,
+            deviceName: Self.deviceName,
             deviceID: deviceID(),
-            version: "1.0.0"
+            version: Self.clientVersion
         )
         let newClient = JellyfinClient(configuration: config)
 
-        // Validate by fetching public users
-        let _ = try await newClient.send(Paths.getPublicUsers).value
+        // Validate by fetching public system info (works even when public user display is disabled)
+        let _ = try await newClient.send(Paths.getPublicSystemInfo).value
 
         self.client = newClient
         self.serverURL = url
@@ -88,6 +99,16 @@ final class JellyfinService {
         self.isAuthenticated = false
         KeychainHelper.delete(key: Keys.accessToken)
         UserDefaults.standard.removeObject(forKey: Keys.userID)
+    }
+
+    /// Disconnect from the server entirely, clearing all saved state.
+    /// After this call `serverURL` is nil, which causes ContentView
+    /// to present the server-connect screen.
+    func disconnect() async {
+        await signOut()
+        self.client = nil
+        self.serverURL = nil
+        UserDefaults.standard.removeObject(forKey: Keys.serverURL)
     }
 
     // MARK: - Library Queries
@@ -249,20 +270,100 @@ final class JellyfinService {
         ).value
     }
 
+    // MARK: - Played Status
+
+    /// Mark an item as fully played/watched
+    func markPlayed(itemID: String) async throws {
+        guard let client else { throw FinnError.notConnected }
+        let _ = try await client.send(
+            Paths.markPlayedItem(itemID: itemID, userID: currentUserID)
+        ).value
+    }
+
+    /// Mark an item as unplayed/unwatched
+    func markUnplayed(itemID: String) async throws {
+        guard let client else { throw FinnError.notConnected }
+        let _ = try await client.send(
+            Paths.markUnplayedItem(itemID: itemID, userID: currentUserID)
+        ).value
+    }
+
     // MARK: - Playback Info
 
-    func getPlaybackInfo(itemID: String) async throws -> PlaybackInfoResponse {
+    func getPlaybackInfo(
+        itemID: String,
+        audioStreamIndex: Int? = nil,
+        subtitleStreamIndex: Int? = nil
+    ) async throws -> PlaybackInfoResponse {
         guard let client else { throw FinnError.notConnected }
-        let params = Paths.GetPostedPlaybackInfoParameters(
-            userID: currentUserID,
+
+        // Build a device profile so the server knows what Apple TV / AVPlayer can handle.
+        // Without this, the server can't determine direct play compatibility or produce
+        // a correct transcoding URL.
+        let deviceProfile = DeviceProfile(
+            directPlayProfiles: [
+                // Containers and codecs AVPlayer supports natively
+                DirectPlayProfile(
+                    audioCodec: "aac,ac3,eac3,flac,alac",
+                    container: "mp4,m4v,mov",
+                    type: .video,
+                    videoCodec: "h264,hevc,mpeg4"
+                ),
+                DirectPlayProfile(
+                    audioCodec: "aac,ac3,eac3,flac,alac,mp3",
+                    container: "mp4,m4v,mov",
+                    type: .audio
+                ),
+            ],
+            maxStreamingBitrate: 120_000_000,
+            subtitleProfiles: [
+                // Text-based formats: embed in HLS manifest as WebVTT
+                // The server converts SRT/VTT to WebVTT segments in the m3u8
+                SubtitleProfile(format: "vtt", method: .embed),
+                SubtitleProfile(format: "srt", method: .embed),
+                SubtitleProfile(format: "subrip", method: .embed),
+                // Image/styled formats: burn into video via server transcode
+                SubtitleProfile(format: "ass", method: .encode),
+                SubtitleProfile(format: "ssa", method: .encode),
+                SubtitleProfile(format: "sub", method: .encode),
+                SubtitleProfile(format: "pgs", method: .encode),
+            ],
+            transcodingProfiles: [
+                TranscodingProfile(
+                    audioCodec: "aac,ac3,eac3",
+                    isBreakOnNonKeyFrames: true,
+                    container: "mp4",
+                    context: .streaming,
+                    protocol: .hls,
+                    type: .video,
+                    videoCodec: "h264,hevc"
+                ),
+                TranscodingProfile(
+                    audioCodec: "aac",
+                    container: "mp4",
+                    context: .streaming,
+                    protocol: .http,
+                    type: .audio
+                ),
+            ]
+        )
+
+        let body = PlaybackInfoDto(
+            allowAudioStreamCopy: true,
+            allowVideoStreamCopy: true,
+            audioStreamIndex: audioStreamIndex,
+            isAutoOpenLiveStream: true,
+            deviceProfile: deviceProfile,
             enableDirectPlay: true,
             enableDirectStream: true,
             enableTranscoding: true,
-            allowVideoStreamCopy: true,
-            allowAudioStreamCopy: true
+            maxStreamingBitrate: 120_000_000,
+            subtitleStreamIndex: subtitleStreamIndex,
+            userID: currentUserID
         )
+
         return try await client.send(
-            Paths.getPostedPlaybackInfo(itemID: itemID, parameters: params)
+            Paths.getPostedPlaybackInfo(itemID: itemID, body)
         ).value
     }
 
@@ -303,15 +404,27 @@ final class JellyfinService {
         let config = JellyfinClient.Configuration(
             url: url,
             accessToken: token,
-            client: "Finn",
-            deviceName: "Apple TV",
+            client: Self.clientName,
+            deviceName: Self.deviceName,
             deviceID: deviceID(),
-            version: "1.0.0"
+            version: Self.clientVersion
         )
         self.client = JellyfinClient(configuration: config)
         self.serverURL = url
         self.currentUserID = userID
         self.isAuthenticated = true
+    }
+
+    /// Validates the restored session by fetching the current user.
+    /// If the token is expired or revoked, signs out so the user sees
+    /// the login screen instead of empty/broken content.
+    func validateSession() async {
+        guard isAuthenticated, client != nil else { return }
+        do {
+            let _ = try await client?.send(Paths.getCurrentUser).value
+        } catch {
+            await signOut()
+        }
     }
 
     private func deviceID() -> String {
