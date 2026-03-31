@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import Combine
 import JellyfinAPI
 
 @MainActor
@@ -25,21 +26,33 @@ final class PlayerViewModel {
     var isPickerVisible = false
     var currentAudioLabel = ""
     var currentSubtitleLabel = ""
+    var subtitleText = "" // Current subtitle text for overlay rendering
 
     // Next episode
     var nextEpisode: BaseItemDto?
     var showNextEpisodeOverlay = false
     var nextEpisodeCountdown = 10
 
+    // Playback completion
+    var isPlaybackComplete = false
+
+    // Burn-in subtitle state (requires transcode restart)
+    var currentBurnInSubtitleIndex: Int?
+
     // MARK: - AVPlayer
 
     private(set) var player: AVPlayer?
     private var timeObserver: Any?
     private var progressTimer: Task<Void, Never>?
+    private var controlsHideTask: Task<Void, Never>?
+    private var statusObservation: NSKeyValueObservation?
+    private var endObservation: NSObjectProtocol?
+    private let subtitleRenderer = SubtitleRenderer()
+    private var subtitleCancellable: AnyCancellable?
 
     // MARK: - Playback info
 
-    let itemID: String
+    private(set) var itemID: String
     private var streamInfo: StreamInfo?
     private var item: BaseItemDto?
     private let jellyfinService: JellyfinService
@@ -86,8 +99,28 @@ final class PlayerViewModel {
 
             // Create player
             let playerItem = AVPlayerItem(url: info.url)
+
+            // Attach subtitle renderer to receive legible output
+            subtitleRenderer.attach(to: playerItem)
+            subtitleCancellable = subtitleRenderer.$currentText
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] text in
+                    self?.subtitleText = text
+                }
+
             let avPlayer = AVPlayer(playerItem: playerItem)
             self.player = avPlayer
+
+            // Observe player item status for errors
+            statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if item.status == .failed {
+                        self.error = item.error?.localizedDescription ?? "Playback failed"
+                        self.isLoading = false
+                    }
+                }
+            }
 
             // Resume position
             let resumePosition = item?.userData?.playbackPositionTicks ?? 0
@@ -110,6 +143,24 @@ final class PlayerViewModel {
 
             // Setup time observer
             setupTimeObserver(avPlayer)
+
+            // Observe playback end
+            endObservation = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handlePlaybackEnd()
+                }
+            }
+
+            // Select default subtitle if server specifies one
+            if let defaultSubIndex = selectedSubtitleIndex {
+                Task {
+                    await selectLegibleOption(for: defaultSubIndex, on: playerItem)
+                }
+            }
 
             // Report playback start
             await playbackService.reportStart(
@@ -143,6 +194,18 @@ final class PlayerViewModel {
         progressTimer?.cancel()
         countdownTask?.cancel()
         scrubTask?.cancel()
+        controlsHideTask?.cancel()
+        statusObservation?.invalidate()
+        statusObservation = nil
+        if let endObservation {
+            NotificationCenter.default.removeObserver(endObservation)
+            self.endObservation = nil
+        }
+        subtitleCancellable?.cancel()
+        subtitleCancellable = nil
+        if let currentItem = player?.currentItem {
+            subtitleRenderer.detach(from: currentItem)
+        }
         if let observer = timeObserver {
             player?.removeTimeObserver(observer)
         }
@@ -157,10 +220,13 @@ final class PlayerViewModel {
         if isPlaying {
             player.pause()
             isPlaying = false
+            controlsHideTask?.cancel()
+            showControlsIfHidden()
             reportCurrentProgress(isPaused: true)
         } else {
             player.play()
             isPlaying = true
+            resetControlsTimer()
             reportCurrentProgress(isPaused: false)
         }
     }
@@ -209,6 +275,27 @@ final class PlayerViewModel {
 
     func toggleControls() {
         isControlsVisible.toggle()
+        if isControlsVisible {
+            resetControlsTimer()
+        } else {
+            controlsHideTask?.cancel()
+        }
+    }
+
+    func showControlsIfHidden() {
+        guard !isControlsVisible else { return }
+        isControlsVisible = true
+        resetControlsTimer()
+    }
+
+    func resetControlsTimer() {
+        controlsHideTask?.cancel()
+        guard isPlaying else { return }
+        controlsHideTask = Task {
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            isControlsVisible = false
+        }
     }
 
     // MARK: - Audio/Subtitle Selection
@@ -222,7 +309,15 @@ final class PlayerViewModel {
             jellyfinService.preferredAudioLanguage = stream.language
         }
 
-        // Report progress with new audio selection
+        // Switch audio track on the player
+        guard let player, let currentItem = player.currentItem else {
+            reportCurrentProgress(isPaused: !isPlaying)
+            return
+        }
+        Task {
+            await selectAudibleOption(for: index, on: currentItem)
+        }
+
         reportCurrentProgress(isPaused: !isPlaying)
     }
 
@@ -230,34 +325,138 @@ final class PlayerViewModel {
         selectedSubtitleIndex = index
         updateTrackLabels()
 
-        // Handle subtitle display on AVPlayer
-        if let player, let currentItem = player.currentItem {
-            if let index {
-                // Find the matching AVMediaSelectionOption
-                let subtitleStream = subtitleStreams.first { $0.index == index }
-                if let subtitleStream, PlaybackService.requiresBurnIn(stream: subtitleStream) {
-                    // ASS/SSA — would need transcode. For now just report to server.
-                    // A full implementation would restart with transcode URL including subtitle burn-in.
+        guard let player, let currentItem = player.currentItem else { return }
+
+        if let index {
+            let subtitleStream = subtitleStreams.first { $0.index == index }
+
+            if let subtitleStream, PlaybackService.requiresBurnIn(stream: subtitleStream) {
+                // Burn-in: restart playback with subtitle index so server burns it into video
+                subtitleText = ""
+                currentBurnInSubtitleIndex = index
+                Task {
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
                 }
-                // For external subtitles (SRT/VTT), AVPlayer handles them if they're in the manifest
+                return
             }
-            // For embedded subtitles, use AVMediaSelectionGroup
-            if let group = currentItem.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) {
-                if let index {
-                    // Try to find matching option by language
-                    let targetLang = subtitleStreams.first { $0.index == index }?.language
-                    let option = group.options.first { option in
-                        option.locale?.languageCode == targetLang
+
+            // Non-burn-in subtitle: if we were previously burning in, restart without burn-in first
+            if currentBurnInSubtitleIndex != nil {
+                currentBurnInSubtitleIndex = nil
+                subtitleText = ""
+                Task {
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
+                    // After restart, select the legible option
+                    if let newItem = self.player?.currentItem {
+                        await selectLegibleOption(for: index, on: newItem)
                     }
-                    currentItem.select(option, in: group)
-                } else {
-                    // Subtitles off
-                    currentItem.select(nil, in: group)
                 }
+                return
+            }
+
+            // Standard embedded subtitle: select via AVMediaSelectionGroup
+            Task {
+                await selectLegibleOption(for: index, on: currentItem)
+            }
+        } else {
+            // Subtitles off
+            subtitleText = ""
+            if currentBurnInSubtitleIndex != nil {
+                // Was burning in — restart without burn-in
+                currentBurnInSubtitleIndex = nil
+                Task {
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
+                }
+                return
+            }
+            Task {
+                await deselectLegibleOptions(on: currentItem)
             }
         }
 
         reportCurrentProgress(isPaused: !isPlaying)
+    }
+
+    /// Select a legible (subtitle) media option by matching Jellyfin stream index
+    /// to AVMediaSelectionOptions available in the HLS manifest.
+    private func selectLegibleOption(for jellyfinIndex: Int, on playerItem: AVPlayerItem) async {
+        guard let asset = playerItem.asset as? AVURLAsset ?? Optional(playerItem.asset) else { return }
+
+        // Load the legible media selection group
+        let group: AVMediaSelectionGroup?
+        if #available(tvOS 16.0, macOS 13.0, *) {
+            group = try? await asset.loadMediaSelectionGroup(for: .legible)
+        } else {
+            group = asset.mediaSelectionGroup(forMediaCharacteristic: .legible)
+        }
+        guard let group else { return }
+
+        let targetStream = subtitleStreams.first { $0.index == jellyfinIndex }
+        let targetLang = targetStream?.language
+        let targetTitle = targetStream?.displayTitle
+
+        // Try to match by language code first, then by display name
+        let option = group.options.first { option in
+            if let targetLang, let optionLang = option.locale?.language.languageCode?.identifier {
+                return optionLang == targetLang
+            }
+            return false
+        } ?? group.options.first { option in
+            if let targetTitle {
+                return option.displayName.localizedCaseInsensitiveContains(targetTitle)
+            }
+            return false
+        } ?? group.options.first // Fallback: select first available
+
+        playerItem.select(option, in: group)
+    }
+
+    /// Deselect all legible media options (turn subtitles off).
+    private func deselectLegibleOptions(on playerItem: AVPlayerItem) async {
+        let group: AVMediaSelectionGroup?
+        if #available(tvOS 16.0, macOS 13.0, *) {
+            group = try? await playerItem.asset.loadMediaSelectionGroup(for: .legible)
+        } else {
+            group = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .legible)
+        }
+        guard let group else { return }
+        playerItem.select(nil, in: group)
+    }
+
+    /// Select an audible (audio) media option by matching Jellyfin stream index
+    /// to AVMediaSelectionOptions available in the HLS manifest.
+    private func selectAudibleOption(for jellyfinIndex: Int, on playerItem: AVPlayerItem) async {
+        let group: AVMediaSelectionGroup?
+        if #available(tvOS 16.0, macOS 13.0, *) {
+            group = try? await playerItem.asset.loadMediaSelectionGroup(for: .audible)
+        } else {
+            group = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .audible)
+        }
+        guard let group else { return }
+
+        let targetStream = audioStreams.first { $0.index == jellyfinIndex }
+        let targetLang = targetStream?.language
+        let targetTitle = targetStream?.displayTitle
+
+        // Match by language code first, then display name
+        let option = group.options.first { option in
+            if let targetLang, let optionLang = option.locale?.language.languageCode?.identifier {
+                return optionLang == targetLang
+            }
+            return false
+        } ?? group.options.first { option in
+            if let targetTitle {
+                return option.displayName.localizedCaseInsensitiveContains(targetTitle)
+            }
+            return false
+        }
+
+        if let option {
+            playerItem.select(option, in: group)
+        } else {
+            // No matching option in manifest — need to restart playback with this audio index
+            await restartPlayback(audioStreamIndex: jellyfinIndex, subtitleStreamIndex: currentBurnInSubtitleIndex)
+        }
     }
 
     func togglePicker() {
@@ -268,10 +467,169 @@ final class PlayerViewModel {
 
     func playNextEpisode() {
         countdownTask?.cancel()
-        guard let next = nextEpisode, next.id != nil else { return }
-        // The view should handle navigation to the next episode
-        // This is signaled by setting a published property
+        guard let next = nextEpisode, let nextID = next.id else { return }
         showNextEpisodeOverlay = false
+
+        // Reload the player in-place with the next episode
+        Task {
+            await loadEpisodeInPlace(nextID)
+        }
+    }
+
+    /// Tears down the current playback and starts a new episode without navigation.
+    private func loadEpisodeInPlace(_ newItemID: String) async {
+        // Clean up current playback
+        await onDisappear()
+
+        // Reset state
+        itemID = newItemID
+        isLoading = true
+        error = nil
+        isPlaying = false
+        currentTime = 0
+        duration = 0
+        isControlsVisible = true
+        showResumeToast = false
+        subtitleText = ""
+        currentBurnInSubtitleIndex = nil
+        showNextEpisodeOverlay = false
+        nextEpisodeCountdown = 10
+        nextEpisode = nil
+        isPlaybackComplete = false
+
+        // Start the new episode
+        await onAppear()
+    }
+
+    /// Restart playback with different stream parameters (audio/subtitle indices).
+    /// Used for burn-in subtitle selection and audio track fallback.
+    private func restartPlayback(audioStreamIndex: Int?, subtitleStreamIndex: Int?) async {
+        let savedTime = currentTime
+        let wasPaused = !isPlaying
+
+        // Tear down current playback
+        progressTimer?.cancel()
+        scrubTask?.cancel()
+        controlsHideTask?.cancel()
+        statusObservation?.invalidate()
+        statusObservation = nil
+        if let endObservation {
+            NotificationCenter.default.removeObserver(endObservation)
+            self.endObservation = nil
+        }
+        subtitleCancellable?.cancel()
+        subtitleCancellable = nil
+        if let currentItem = player?.currentItem {
+            subtitleRenderer.detach(from: currentItem)
+        }
+        if let observer = timeObserver {
+            player?.removeTimeObserver(observer)
+            timeObserver = nil
+        }
+        player?.pause()
+        player = nil
+
+        // Report stop with current position
+        if let streamInfo {
+            let ticks = secondsToTicks(savedTime)
+            await playbackService.reportStopped(
+                itemID: itemID,
+                mediaSourceID: streamInfo.mediaSource.id,
+                playSessionID: streamInfo.playSessionID,
+                positionTicks: ticks
+            )
+        }
+
+        isLoading = true
+
+        do {
+            // Get new stream info with updated indices
+            let info = try await playbackService.getStreamInfo(
+                itemID: itemID,
+                audioStreamIndex: audioStreamIndex,
+                subtitleStreamIndex: subtitleStreamIndex
+            )
+            streamInfo = info
+
+            // Update tracks from new media source
+            audioStreams = PlaybackService.audioStreams(from: info.mediaSource)
+            subtitleStreams = PlaybackService.subtitleStreams(from: info.mediaSource)
+            updateTrackLabels()
+
+            // Create new player
+            let playerItem = AVPlayerItem(url: info.url)
+
+            // Only attach subtitle renderer if not using burn-in
+            if currentBurnInSubtitleIndex == nil {
+                subtitleRenderer.attach(to: playerItem)
+                subtitleCancellable = subtitleRenderer.$currentText
+                    .receive(on: DispatchQueue.main)
+                    .sink { [weak self] text in
+                        self?.subtitleText = text
+                    }
+            }
+
+            let avPlayer = AVPlayer(playerItem: playerItem)
+            self.player = avPlayer
+
+            // Observe errors
+            statusObservation = playerItem.observe(\.status, options: [.new]) { [weak self] item, _ in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    if item.status == .failed {
+                        self.error = item.error?.localizedDescription ?? "Playback failed"
+                        self.isLoading = false
+                    }
+                }
+            }
+
+            // Seek to saved position
+            if savedTime > 0 {
+                await avPlayer.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
+            }
+
+            // Resume or stay paused
+            if !wasPaused {
+                avPlayer.play()
+                isPlaying = true
+            } else {
+                isPlaying = false
+            }
+            isLoading = false
+
+            // Re-setup observers
+            setupTimeObserver(avPlayer)
+
+            endObservation = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: playerItem,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.handlePlaybackEnd()
+                }
+            }
+
+            // Re-select non-burn-in subtitle if active
+            if currentBurnInSubtitleIndex == nil, let subIndex = selectedSubtitleIndex {
+                await selectLegibleOption(for: subIndex, on: playerItem)
+            }
+
+            // Report start
+            await playbackService.reportStart(
+                itemID: itemID,
+                mediaSourceID: info.mediaSource.id,
+                playSessionID: info.playSessionID,
+                positionTicks: secondsToTicks(savedTime),
+                playMethod: info.playMethod
+            )
+
+            startProgressReporting()
+
+        } catch {
+            self.error = "Failed to restart playback"
+            isLoading = false
+        }
     }
 
     func cancelNextEpisode() {
@@ -380,6 +738,20 @@ final class PlayerViewModel {
         if remaining <= 10 && remaining > 0 {
             showNextEpisodeOverlay = true
             startNextEpisodeCountdown()
+        }
+    }
+
+    private func handlePlaybackEnd() {
+        isPlaying = false
+        controlsHideTask?.cancel()
+        if nextEpisode != nil {
+            // Trigger next episode overlay if not already shown
+            if !showNextEpisodeOverlay {
+                showNextEpisodeOverlay = true
+                startNextEpisodeCountdown()
+            }
+        } else {
+            isPlaybackComplete = true
         }
     }
 
