@@ -11,84 +11,47 @@ struct SearchView: View {
     ]
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Search input
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("Search movies and series...", text: $viewModel.query)
-                    .textFieldStyle(.plain)
-                    .autocorrectionDisabled()
-                    .onChange(of: viewModel.query) {
-                        viewModel.onQueryChanged()
-                    }
-                if !viewModel.query.isEmpty {
-                    Button {
-                        viewModel.query = ""
-                        viewModel.results = []
-                        viewModel.hasSearched = false
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+        searchResults
+            .searchable(text: $viewModel.query, prompt: "Movies and series")
+            .autocorrectionDisabled()
+            .onChange(of: viewModel.query) {
+                viewModel.onQueryChanged()
             }
-            .padding()
-            .liquidGlass(in: 12, isInteractive: true)
-            .padding(.horizontal, 60)
-            .padding(.top, 30)
-            .focusSection()
+    }
 
-            // Results
-            if viewModel.isSearching {
-                Spacer()
-                ProgressView()
-                Spacer()
-            } else if viewModel.results.isEmpty && viewModel.hasSearched {
-                Spacer()
-                VStack(spacing: 16) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-                    Text("No results found")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    Text("Try a different search term")
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer()
-            } else if viewModel.results.isEmpty && !viewModel.hasSearched {
-                Spacer()
-                VStack(spacing: 16) {
-                    Image(systemName: "tv")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.secondary)
-                    Text("Search your library")
-                        .font(.title3)
-                        .foregroundStyle(.secondary)
-                    Text("Find movies and series")
-                        .font(.callout)
-                        .foregroundStyle(.tertiary)
-                }
-                Spacer()
-            } else {
-                ScrollView {
-                    LazyVGrid(columns: columns, spacing: 40) {
-                        ForEach(viewModel.results, id: \.id) { item in
-                            Button {
-                                navigateToDetail(item)
-                            } label: {
-                                PosterCard(item: item, imageService: imageService)
-                            }
-                            .tvCardButton()
+    // MARK: - Results
+
+    @ViewBuilder
+    private var searchResults: some View {
+        if viewModel.isSearching {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if viewModel.results.isEmpty && viewModel.hasSearched {
+            ContentUnavailableView(
+                "No results found",
+                systemImage: "magnifyingglass",
+                description: Text("Try a different search term")
+            )
+        } else if viewModel.results.isEmpty {
+            ContentUnavailableView(
+                "Search your library",
+                systemImage: "tv",
+                description: Text("Find movies and series")
+            )
+        } else {
+            ScrollView {
+                LazyVGrid(columns: columns, spacing: 40) {
+                    ForEach(viewModel.results, id: \.id) { item in
+                        Button {
+                            navigateToDetail(item)
+                        } label: {
+                            PosterCard(item: item, imageService: imageService)
                         }
+                        .tvCardButton()
                     }
-                    .padding(.horizontal, 60)
-                    .padding(.vertical, 30)
                 }
-                .focusSection()
+                .padding(.horizontal, 60)
+                .padding(.vertical, 30)
             }
         }
     }
