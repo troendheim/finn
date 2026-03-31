@@ -44,6 +44,10 @@ final class PlayerViewModel {
     var isSeekPreviewing: Bool { seekPreviewTime != nil }
     private var seekCommitTask: Task<Void, Never>?
 
+    // Buffering
+    var isBuffering = false
+    private var timeControlObservation: NSKeyValueObservation?
+
     // MARK: - AVPlayer
 
     private(set) var player: AVPlayer?
@@ -148,6 +152,7 @@ final class PlayerViewModel {
 
             // Setup time observer
             setupTimeObserver(avPlayer)
+            setupTimeControlObserver(avPlayer)
 
             // Observe playback end
             endObservation = NotificationCenter.default.addObserver(
@@ -203,6 +208,8 @@ final class PlayerViewModel {
         seekCommitTask?.cancel()
         statusObservation?.invalidate()
         statusObservation = nil
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
         if let endObservation {
             NotificationCenter.default.removeObserver(endObservation)
             self.endObservation = nil
@@ -566,6 +573,8 @@ final class PlayerViewModel {
         controlsHideTask?.cancel()
         statusObservation?.invalidate()
         statusObservation = nil
+        timeControlObservation?.invalidate()
+        timeControlObservation = nil
         if let endObservation {
             NotificationCenter.default.removeObserver(endObservation)
             self.endObservation = nil
@@ -652,6 +661,7 @@ final class PlayerViewModel {
 
             // Re-setup observers
             setupTimeObserver(avPlayer)
+            setupTimeControlObserver(avPlayer)
 
             endObservation = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
@@ -703,6 +713,27 @@ final class PlayerViewModel {
                 }
                 // Check for near-end (next episode countdown)
                 self.checkNearEnd()
+            }
+        }
+    }
+
+    private func setupTimeControlObserver(_ player: AVPlayer) {
+        timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                switch player.timeControlStatus {
+                case .playing:
+                    self.isPlaying = true
+                    self.isBuffering = false
+                case .paused:
+                    // Only update isPlaying if we didn't initiate the pause
+                    // (user-initiated pauses are handled in togglePlayPause)
+                    self.isBuffering = false
+                case .waitingToPlayAtSpecifiedRate:
+                    self.isBuffering = true
+                @unknown default:
+                    break
+                }
             }
         }
     }
