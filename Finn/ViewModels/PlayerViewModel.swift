@@ -345,6 +345,7 @@ final class PlayerViewModel {
         guard !isLoading else { return }
         error = nil
         isLoading = true
+        teardownPlayer()
         Task {
             await onAppear()
         }
