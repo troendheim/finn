@@ -211,6 +211,9 @@ final class PlayerViewModel {
     }
 
     func onDisappear() async {
+        // Pause immediately so audio stops before the network call
+        player?.pause()
+
         // Report stopped
         let ticks = secondsToTicks(currentTime)
         await playbackService.reportStopped(
