@@ -719,17 +719,53 @@ final class PlayerViewModel {
     }
 
     private func loadNextEpisode(seriesID: String, seasonID: String) async {
+        // Tier 1: Check same season for next episode (fast path)
         do {
             let episodes = try await jellyfinService.getEpisodes(
                 seriesID: seriesID,
                 seasonID: seasonID
             )
-            // Find current episode index and get next
             if let currentIndex = episodes.firstIndex(where: { $0.id == itemID }),
                currentIndex + 1 < episodes.count {
                 nextEpisode = episodes[currentIndex + 1]
+                return
             }
         } catch {}
+
+        // Tier 2: Use getNextUp API for cross-season detection (server-authoritative)
+        do {
+            if let nextUp = try await jellyfinService.getNextUp(seriesID: seriesID) {
+                // Make sure it's not the current episode
+                if nextUp.id != itemID {
+                    nextEpisode = nextUp
+                    return
+                }
+            }
+        } catch {}
+
+        // Tier 3: Manual season traversal fallback (for rewatching scenarios)
+        do {
+            let seasons = try await jellyfinService.getSeasons(seriesID: seriesID)
+            let currentSeasonNumber = item?.parentIndexNumber ?? 0
+
+            // Find next season by indexNumber
+            let sortedSeasons = seasons
+                .filter { ($0.indexNumber ?? 0) > currentSeasonNumber }
+                .sorted { ($0.indexNumber ?? 0) < ($1.indexNumber ?? 0) }
+
+            if let nextSeason = sortedSeasons.first, let nextSeasonID = nextSeason.id {
+                let episodes = try await jellyfinService.getEpisodes(
+                    seriesID: seriesID,
+                    seasonID: nextSeasonID
+                )
+                if let firstEpisode = episodes.first {
+                    nextEpisode = firstEpisode
+                    return
+                }
+            }
+        } catch {}
+
+        // All tiers exhausted — no next episode available
     }
 
     private func checkNearEnd() {
