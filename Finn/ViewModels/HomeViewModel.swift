@@ -11,6 +11,7 @@ final class HomeViewModel {
     var latestMedia: [BaseItemDto] = []
     var genreRows: [(genre: BaseItemDto, items: [BaseItemDto])] = []
     var isLoading = false
+    var isLoadingGenres = false
     var error: String?
 
     let jellyfinService: JellyfinService
@@ -28,6 +29,7 @@ final class HomeViewModel {
     /// Whether every content section is empty (and we're not still loading).
     var isLibraryEmpty: Bool {
         !isLoading
+            && !isLoadingGenres
             && continueWatching.isEmpty
             && nextUp.isEmpty
             && latestMedia.isEmpty
@@ -64,10 +66,13 @@ final class HomeViewModel {
         nextUp = results.1
         latestMedia = results.2
 
-        // Load genre rows (after main rows to avoid delaying them)
-        await loadGenreRows()
-
+        // Main content is ready — stop showing the spinner
         isLoading = false
+
+        // Load genre rows in the background (they'll appear as they arrive)
+        isLoadingGenres = true
+        await loadGenreRows()
+        isLoadingGenres = false
     }
 
     func refresh() async {
@@ -91,18 +96,31 @@ final class HomeViewModel {
             // Take up to 5 genres for the home screen
             let selected = Array(genres.prefix(5))
 
-            var rows: [(genre: BaseItemDto, items: [BaseItemDto])] = []
-            for genre in selected {
-                guard let genreID = genre.id else { continue }
-                do {
-                    let items = try await jellyfinService.getItemsByGenre(genreID: genreID)
-                    if !items.isEmpty {
-                        rows.append((genre: genre, items: items))
+            // Fetch all genre rows concurrently instead of sequentially
+            let rows: [(genre: BaseItemDto, items: [BaseItemDto])] = await withTaskGroup(
+                of: (Int, BaseItemDto, [BaseItemDto])?.self
+            ) { group in
+                for (index, genre) in selected.enumerated() {
+                    guard let genreID = genre.id else { continue }
+                    group.addTask { [jellyfinService] in
+                        do {
+                            let items = try await jellyfinService.getItemsByGenre(genreID: genreID)
+                            return items.isEmpty ? nil : (index, genre, items)
+                        } catch {
+                            return nil
+                        }
                     }
-                } catch {
-                    // Skip failed genre rows silently
                 }
+
+                var results: [(index: Int, genre: BaseItemDto, items: [BaseItemDto])] = []
+                for await result in group {
+                    if let result { results.append(result) }
+                }
+                // Sort by original index to preserve stable genre ordering
+                return results.sorted(by: { $0.index < $1.index })
+                    .map { (genre: $0.genre, items: $0.items) }
             }
+
             genreRows = rows
         } catch {
             // Genre rows are non-critical, don't set top-level error
