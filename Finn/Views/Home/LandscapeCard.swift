@@ -6,11 +6,11 @@ struct LandscapeCard: View {
     let item: BaseItemDto
     let imageService: ImageService?
 
-    private let cardWidth: CGFloat = 440
-    private let cardHeight: CGFloat = 248 // 16:9
+    private let cardWidth: CGFloat = 500
+    private let cardHeight: CGFloat = 281 // 16:9
 
     var body: some View {
-        ZStack(alignment: .bottomLeading) {
+        ZStack(alignment: .bottom) {
             // Background image — try thumb, backdrop, then primary with series fallback
             if let url = imageService?.landscapeURL(item: item, maxWidth: Int(cardWidth)) {
                 AsyncImage(url: url) { image in
@@ -22,45 +22,41 @@ struct LandscapeCard: View {
                 Rectangle().fill(.gray.opacity(0.2))
             }
 
-            // Gradient overlay
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.8)],
-                startPoint: .center,
-                endPoint: .bottom
-            )
+            VStack(spacing: 0) {
+                // Text overlay — full-width Liquid Glass bar at bottom
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let episodeLabel = item.episodeLabel {
+                            Text(episodeLabel)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
 
-            // Text overlay
-            VStack(alignment: .leading, spacing: 4) {
-                if let episodeLabel = item.episodeLabel {
-                    Text(episodeLabel)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+                        Text(item.seriesName ?? item.name ?? "")
+                            .font(.callout)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
 
-                Text(item.seriesName ?? item.name ?? "")
-                    .font(.body)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-
-                if item.hasProgress, let total = item.runTimeTicks, let pos = item.userData?.playbackPositionTicks {
-                    Text(TimeFormatting.remaining(totalTicks: total, positionTicks: pos))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(16)
-            .liquidGlass(in: 12)
-
-            // Progress bar at bottom
-            if item.playbackProgress > 0 {
-                VStack {
+                        if item.hasProgress, let total = item.runTimeTicks, let pos = item.userData?.playbackPositionTicks {
+                            Text(TimeFormatting.remaining(totalTicks: total, positionTicks: pos))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                     Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .liquidGlass(in: 0)
+
+                // Progress bar at very bottom, below the glass bar
+                if item.playbackProgress > 0 {
                     GeometryReader { geo in
                         Rectangle()
                             .fill(.red)
-                            .frame(width: geo.size.width * item.playbackProgress, height: 5)
+                            .frame(width: geo.size.width * item.playbackProgress, height: 4)
                     }
-                    .frame(height: 5)
+                    .frame(height: 4)
                 }
             }
         }

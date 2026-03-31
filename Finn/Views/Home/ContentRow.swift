@@ -16,7 +16,7 @@ struct ContentRow<Card: View>: View {
                     .padding(.leading, 60)
 
                 ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 24) {
+                    LazyHStack(spacing: 40) {
                         ForEach(items, id: \.id) { item in
                             Button {
                                 onSelect(item)
@@ -27,6 +27,7 @@ struct ContentRow<Card: View>: View {
                         }
                     }
                     .padding(.horizontal, 60)
+                    .padding(.vertical, 20)
                 }
             }
         }
