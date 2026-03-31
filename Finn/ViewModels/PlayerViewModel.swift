@@ -68,6 +68,8 @@ final class PlayerViewModel {
     private let playbackService: PlaybackService
     private var countdownTask: Task<Void, Never>?
     private var toastTask: Task<Void, Never>?
+    private var retryTask: Task<Void, Never>?
+    private var playerActionTask: Task<Void, Never>?
 
     // MARK: - Continuous Scrub (hold to fast-forward/rewind)
 
@@ -134,10 +136,12 @@ final class PlayerViewModel {
 
             // Observe player item status for errors
             statusObservation = playerItem.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
+                let status = item.status
+                let errorMessage = item.error?.localizedDescription
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    if item.status == .failed {
-                        self.error = item.error?.localizedDescription ?? "Playback failed"
+                    if status == .failed {
+                        self.error = errorMessage ?? "Playback failed"
                         self.isLoading = false
                     }
                 }
@@ -180,7 +184,7 @@ final class PlayerViewModel {
 
             // Select default subtitle if server specifies one
             if let defaultSubIndex = selectedSubtitleIndex {
-                Task {
+                playerActionTask = Task {
                     await selectLegibleOption(for: defaultSubIndex, on: playerItem)
                 }
             }
@@ -222,6 +226,8 @@ final class PlayerViewModel {
         progressTimer?.cancel()
         countdownTask?.cancel()
         toastTask?.cancel()
+        retryTask?.cancel()
+        playerActionTask?.cancel()
         scrubTask?.cancel()
         controlsHideTask?.cancel()
         seekCommitTask?.cancel()
@@ -350,7 +356,8 @@ final class PlayerViewModel {
         error = nil
         isLoading = true
         teardownPlayer()
-        Task {
+        retryTask?.cancel()
+        retryTask = Task {
             await onAppear()
         }
     }
@@ -405,7 +412,8 @@ final class PlayerViewModel {
             reportCurrentProgress(isPaused: !isPlaying)
             return
         }
-        Task {
+        playerActionTask?.cancel()
+        playerActionTask = Task {
             await selectAudibleOption(for: index, on: currentItem)
         }
 
@@ -434,7 +442,8 @@ final class PlayerViewModel {
                 // Burn-in: restart playback with subtitle index so server burns it into video
                 subtitleText = ""
                 currentBurnInSubtitleIndex = index
-                Task {
+                playerActionTask?.cancel()
+                playerActionTask = Task {
                     await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
                 }
                 return
@@ -444,7 +453,8 @@ final class PlayerViewModel {
             if currentBurnInSubtitleIndex != nil {
                 currentBurnInSubtitleIndex = nil
                 subtitleText = ""
-                Task {
+                playerActionTask?.cancel()
+                playerActionTask = Task {
                     await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
                     // After restart, select the legible option
                     if let newItem = self.player?.currentItem {
@@ -455,7 +465,8 @@ final class PlayerViewModel {
             }
 
             // Standard embedded subtitle: select via AVMediaSelectionGroup
-            Task {
+            playerActionTask?.cancel()
+            playerActionTask = Task {
                 await selectLegibleOption(for: index, on: currentItem)
             }
         } else {
@@ -464,7 +475,8 @@ final class PlayerViewModel {
             if currentBurnInSubtitleIndex != nil {
                 // Was burning in — restart without burn-in
                 currentBurnInSubtitleIndex = nil
-                Task {
+                playerActionTask?.cancel()
+                playerActionTask = Task {
                     await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
                 }
                 return
@@ -571,7 +583,8 @@ final class PlayerViewModel {
         showNextEpisodeOverlay = false
 
         // Reload the player in-place with the next episode
-        Task {
+        playerActionTask?.cancel()
+        playerActionTask = Task {
             await loadEpisodeInPlace(nextID)
         }
     }
@@ -660,10 +673,12 @@ final class PlayerViewModel {
 
             // Observe errors
             statusObservation = playerItem.observe(\.status, options: [.new, .initial]) { [weak self] item, _ in
+                let status = item.status
+                let errorMessage = item.error?.localizedDescription
                 Task { @MainActor [weak self] in
                     guard let self else { return }
-                    if item.status == .failed {
-                        self.error = item.error?.localizedDescription ?? "Playback failed"
+                    if status == .failed {
+                        self.error = errorMessage ?? "Playback failed"
                         self.isLoading = false
                     }
                 }
@@ -733,7 +748,7 @@ final class PlayerViewModel {
             guard let self else { return }
             Task { @MainActor in
                 self.currentTime = time.seconds
-                if let dur = player.currentItem?.duration, dur.isNumeric {
+                if let dur = self.player?.currentItem?.duration, dur.isNumeric {
                     self.duration = dur.seconds
                 }
                 // Check for near-end (next episode countdown)
