@@ -8,7 +8,8 @@ struct ServerConnectView: View {
             Spacer()
 
             Text("Finn")
-                .font(.system(size: 72, weight: .bold))
+                .font(.largeTitle)
+                .fontWeight(.bold)
 
             Text("Connect to your Jellyfin server")
                 .font(.title3)
@@ -38,6 +39,12 @@ struct ServerConnectView: View {
                     }
                 }
                 .disabled(viewModel.isConnecting)
+
+                if viewModel.isInsecureWarning {
+                    Label("Insecure connection (HTTP). Your data will not be encrypted.", systemImage: "lock.open")
+                        .foregroundStyle(.orange)
+                        .font(.callout)
+                }
 
                 if let error = viewModel.error {
                     Text(error)
