@@ -54,19 +54,15 @@ final class HomeViewModel {
         isLoading = true
         error = nil
 
-        // Load main rows concurrently
-        async let resumeTask = jellyfinService.getResumeItems()
-        async let nextUpTask = jellyfinService.getNextUp()
-        async let latestTask = jellyfinService.getLatestMedia()
+        // Load main rows concurrently with individual error handling
+        async let resumeResult: [BaseItemDto] = loadSection { try await jellyfinService.getResumeItems() }
+        async let nextUpResult: [BaseItemDto] = loadSection { try await jellyfinService.getNextUp() }
+        async let latestResult: [BaseItemDto] = loadSection { try await jellyfinService.getLatestMedia() }
 
-        do {
-            let (resume, next, latest) = try await (resumeTask, nextUpTask, latestTask)
-            continueWatching = resume
-            nextUp = next
-            latestMedia = latest
-        } catch {
-            self.error = "Failed to load library"
-        }
+        let results = await (resumeResult, nextUpResult, latestResult)
+        continueWatching = results.0
+        nextUp = results.1
+        latestMedia = results.2
 
         // Load genre rows (after main rows to avoid delaying them)
         await loadGenreRows()
@@ -79,6 +75,15 @@ final class HomeViewModel {
     }
 
     // MARK: - Private
+
+    /// Load a section, returning empty array on failure instead of throwing.
+    private func loadSection(_ fetch: @Sendable () async throws -> [BaseItemDto]) async -> [BaseItemDto] {
+        do {
+            return try await fetch()
+        } catch {
+            return []
+        }
+    }
 
     private func loadGenreRows() async {
         do {
