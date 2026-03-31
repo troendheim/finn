@@ -161,6 +161,9 @@ struct PlayerView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.isPickerVisible)
         .animation(.easeInOut(duration: 0.3), value: viewModel.isControlsVisible)
+        #if os(tvOS)
+        .focusable(!viewModel.isControlsVisible && !viewModel.isPickerVisible)
+        #endif
         .task {
             await viewModel.onAppear()
         }
