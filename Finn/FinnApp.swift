@@ -9,7 +9,7 @@ struct FinnApp: App {
     init() {
         // SPM executables don't get automatic app activation — force it
         NSApplication.shared.setActivationPolicy(.regular)
-        NSApplication.shared.activate(ignoringOtherApps: true)
+        NSApplication.shared.activate()
     }
     #endif
 
