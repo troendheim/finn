@@ -768,6 +768,7 @@ final class PlayerViewModel {
 
     private func reportCurrentProgress(isPaused: Bool) {
         guard let streamInfo else { return }
+        guard scrubTask == nil else { return } // Skip during continuous scrub
         let ticks = secondsToTicks(currentTime)
         Task {
             await playbackService.reportProgress(
