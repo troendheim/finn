@@ -178,6 +178,9 @@ final class PlayerViewModel {
             isPlaying = true
             isLoading = false
 
+            // Auto-hide controls after playback starts
+            resetControlsTimer()
+
             // Setup time observer
             setupTimeObserver(avPlayer)
             setupTimeControlObserver(avPlayer)
@@ -504,8 +507,13 @@ final class PlayerViewModel {
         guard let group else { return }
 
         let targetStream = subtitleStreams.first { $0.index == jellyfinIndex }
-        let targetLang = targetStream?.language
         let targetTitle = targetStream?.displayTitle
+
+        // Normalize Jellyfin's language code (3-letter ISO 639-2 like "dan", "eng") to
+        // a 2-letter ISO 639-1 code ("da", "en") so it matches AVPlayer's locale identifiers.
+        let targetLang: String? = targetStream?.language.flatMap {
+            Locale(identifier: $0).language.languageCode?.identifier
+        }
 
         // Try to match by language code first, then by display name
         let option = group.options.first { option in
@@ -547,8 +555,13 @@ final class PlayerViewModel {
         guard let group else { return }
 
         let targetStream = audioStreams.first { $0.index == jellyfinIndex }
-        let targetLang = targetStream?.language
         let targetTitle = targetStream?.displayTitle
+
+        // Normalize Jellyfin's language code (3-letter ISO 639-2 like "dan", "eng") to
+        // a 2-letter ISO 639-1 code ("da", "en") so it matches AVPlayer's locale identifiers.
+        let targetLang: String? = targetStream?.language.flatMap {
+            Locale(identifier: $0).language.languageCode?.identifier
+        }
 
         // Match by language code first, then display name
         let option = group.options.first { option in

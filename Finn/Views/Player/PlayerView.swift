@@ -117,6 +117,7 @@ struct PlayerView: View {
             // Controls overlay
             if viewModel.isControlsVisible && !viewModel.isLoading {
                 controlsOverlay
+                    .transition(.opacity)
             }
 
             // Resume toast
@@ -159,6 +160,7 @@ struct PlayerView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.isPickerVisible)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.isControlsVisible)
         .task {
             await viewModel.onAppear()
         }

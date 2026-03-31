@@ -10,6 +10,27 @@ struct AudioSubtitlePicker: View {
     let onSelectSubtitle: (Int?) -> Void
     let onDismiss: () -> Void
 
+    /// Identifies each focusable item in the picker.
+    private enum FocusItem: Hashable {
+        case audio(Int)       // Jellyfin stream index
+        case subtitleOff
+        case subtitle(Int)    // Jellyfin stream index
+    }
+
+    @FocusState private var focusedItem: FocusItem?
+
+    /// The item that should receive focus when the picker first appears.
+    private var initialFocusItem: FocusItem {
+        // Focus the currently-selected audio track (left column, top-ish)
+        if let idx = selectedAudioIndex {
+            return .audio(idx)
+        }
+        if let first = audioStreams.first?.index {
+            return .audio(first)
+        }
+        return .subtitleOff
+    }
+
     var body: some View {
         ZStack {
             // Dimmed backdrop
@@ -22,61 +43,76 @@ struct AudioSubtitlePicker: View {
 
                 HStack(alignment: .top, spacing: 60) {
                     // Audio column
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Audio")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .padding(.bottom, 4)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Audio")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.bottom, 4)
 
-                        ForEach(audioStreams, id: \.index) { stream in
-                            TrackButton(
-                                title: stream.displayTitle ?? stream.language ?? "Unknown",
-                                detail: audioDetail(stream),
-                                isSelected: stream.index == selectedAudioIndex
-                            ) {
-                                if let index = stream.index {
-                                    onSelectAudio(index)
+                            ForEach(audioStreams, id: \.index) { stream in
+                                TrackButton(
+                                    title: stream.displayTitle ?? stream.language ?? "Unknown",
+                                    detail: audioDetail(stream),
+                                    isSelected: stream.index == selectedAudioIndex
+                                ) {
+                                    if let index = stream.index {
+                                        onSelectAudio(index)
+                                    }
                                 }
+                                .focused($focusedItem, equals: .audio(stream.index ?? -1))
                             }
                         }
+                        .padding(.vertical, 8)
                     }
                     .frame(minWidth: 300, alignment: .leading)
 
                     // Subtitle column
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Subtitles")
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .padding(.bottom, 4)
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Subtitles")
+                                .font(.title3)
+                                .fontWeight(.bold)
+                                .padding(.bottom, 4)
 
-                        // Off option
-                        TrackButton(
-                            title: "Off",
-                            detail: nil,
-                            isSelected: selectedSubtitleIndex == nil
-                        ) {
-                            onSelectSubtitle(nil)
-                        }
-
-                        ForEach(subtitleStreams, id: \.index) { stream in
+                            // Off option
                             TrackButton(
-                                title: stream.displayTitle ?? stream.language ?? "Unknown",
-                                detail: subtitleDetail(stream),
-                                isSelected: stream.index == selectedSubtitleIndex
+                                title: "Off",
+                                detail: nil,
+                                isSelected: selectedSubtitleIndex == nil
                             ) {
-                                onSelectSubtitle(stream.index)
+                                onSelectSubtitle(nil)
+                            }
+                            .focused($focusedItem, equals: .subtitleOff)
+
+                            ForEach(subtitleStreams, id: \.index) { stream in
+                                TrackButton(
+                                    title: stream.displayTitle ?? stream.language ?? "Unknown",
+                                    detail: subtitleDetail(stream),
+                                    isSelected: stream.index == selectedSubtitleIndex
+                                ) {
+                                    onSelectSubtitle(stream.index)
+                                }
+                                .focused($focusedItem, equals: .subtitle(stream.index ?? -1))
                             }
                         }
+                        .padding(.vertical, 8)
                     }
                     .frame(minWidth: 300, alignment: .leading)
                 }
+                .focusSection()
                 .padding(50)
+                .frame(maxHeight: 500)
                 .background(.ultraThinMaterial)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.horizontal, 80)
                 .padding(.bottom, 60)
             }
             .transition(.move(edge: .bottom))
+        }
+        .onAppear {
+            // Set initial focus so the user doesn't have to press up first
+            focusedItem = initialFocusItem
         }
     }
 
