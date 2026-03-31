@@ -45,7 +45,7 @@ struct SearchView: View {
                             } label: {
                                 searchResultRow(item)
                             }
-                            .buttonStyle(.plain)
+                            .tvCardButton()
                         }
                     }
                     .padding(.horizontal, 60)
@@ -74,7 +74,7 @@ struct SearchView: View {
                 // Title with type badge
                 HStack(spacing: 10) {
                     Text(item.name ?? "")
-                        .font(.callout)
+                        .font(.body)
                         .fontWeight(.semibold)
                         .lineLimit(1)
 
@@ -83,13 +83,13 @@ struct SearchView: View {
 
                 // Year and runtime/season count
                 metadataText(item)
-                    .font(.caption)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
 
                 // Brief description
                 if let overview = item.overview {
                     Text(overview)
-                        .font(.caption)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
@@ -102,9 +102,13 @@ struct SearchView: View {
 
     @ViewBuilder
     private func typeBadge(_ item: BaseItemDto) -> some View {
-        let label = item.type == .series ? "Series" : "Movie"
+        let label: String = switch item.type {
+        case .series: "Series"
+        case .episode: "Episode"
+        default: "Movie"
+        }
         Text(label)
-            .font(.caption2)
+            .font(.callout)
             .fontWeight(.medium)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
@@ -132,6 +136,8 @@ struct SearchView: View {
             navigationPath.append(AppDestination.movieDetail(itemID: id))
         case .series:
             navigationPath.append(AppDestination.seriesDetail(itemID: id))
+        case .episode:
+            navigationPath.append(AppDestination.player(itemID: id))
         default:
             break
         }
