@@ -11,6 +11,9 @@ struct TransportControls: View {
     var onHoldBackward: (() -> Void)? = nil
     var onHoldRelease: (() -> Void)? = nil
 
+    @State private var isHoldingBackward = false
+    @State private var isHoldingForward = false
+
     private var progress: Double {
         guard duration > 0 else { return 0 }
         return currentTime / duration
@@ -50,18 +53,17 @@ struct TransportControls: View {
                         .font(.system(size: 36))
                 }
                 .buttonStyle(.plain)
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5)
-                        .sequenced(before: DragGesture(minimumDistance: 0))
-                        .onChanged { value in
-                            if case .second(true, _) = value {
-                                onHoldBackward?()
-                            }
-                        }
-                        .onEnded { _ in
-                            onHoldRelease?()
-                        }
-                )
+                .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
+                    if pressing {
+                        isHoldingBackward = true
+                        onHoldBackward?()
+                    } else if isHoldingBackward {
+                        isHoldingBackward = false
+                        onHoldRelease?()
+                    }
+                }, perform: {
+                    // Long press recognized — scrub is already running via pressing callback
+                })
 
                 // Play/Pause
                 Button {
@@ -80,18 +82,17 @@ struct TransportControls: View {
                         .font(.system(size: 36))
                 }
                 .buttonStyle(.plain)
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5)
-                        .sequenced(before: DragGesture(minimumDistance: 0))
-                        .onChanged { value in
-                            if case .second(true, _) = value {
-                                onHoldForward?()
-                            }
-                        }
-                        .onEnded { _ in
-                            onHoldRelease?()
-                        }
-                )
+                .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
+                    if pressing {
+                        isHoldingForward = true
+                        onHoldForward?()
+                    } else if isHoldingForward {
+                        isHoldingForward = false
+                        onHoldRelease?()
+                    }
+                }, perform: {
+                    // Long press recognized — scrub is already running via pressing callback
+                })
             }
         }
     }

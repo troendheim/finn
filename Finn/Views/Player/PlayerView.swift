@@ -79,6 +79,13 @@ struct PlayerView: View {
         .onDisappear {
             Task { await viewModel.onDisappear() }
         }
+        #if os(tvOS)
+        .onMoveCommand { direction in
+            if direction == .down {
+                viewModel.togglePicker()
+            }
+        }
+        #else
         .gesture(
             DragGesture(minimumDistance: 50)
                 .onEnded { value in
@@ -87,6 +94,7 @@ struct PlayerView: View {
                     }
                 }
         )
+        #endif
     }
 
     // MARK: - Controls Overlay
