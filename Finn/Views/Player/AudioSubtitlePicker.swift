@@ -66,6 +66,7 @@ struct AudioSubtitlePicker: View {
                         .padding(.vertical, 8)
                     }
                     .frame(minWidth: 300, alignment: .leading)
+                    .focusSection()
 
                     // Subtitle column
                     ScrollView(.vertical, showsIndicators: false) {
@@ -99,8 +100,8 @@ struct AudioSubtitlePicker: View {
                         .padding(.vertical, 8)
                     }
                     .frame(minWidth: 300, alignment: .leading)
+                    .focusSection()
                 }
-                .focusSection()
                 .padding(50)
                 .frame(maxHeight: 500)
                 .liquidGlass(in: 20)
