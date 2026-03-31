@@ -30,10 +30,14 @@ final class PlaybackService {
 
         let playSessionID = response.playSessionID
 
-        // Determine play method
+        // Determine play method (pass requested indices so transcode URLs
+        // get the correct SubtitleStreamIndex / AudioStreamIndex — the server
+        // may return a transcodingURL with stale defaults)
         let (url, playMethod) = try buildStreamURL(
             mediaSource: mediaSource,
-            serverURL: jellyfinService.serverURL
+            serverURL: jellyfinService.serverURL,
+            audioStreamIndex: audioStreamIndex,
+            subtitleStreamIndex: subtitleStreamIndex
         )
 
         return StreamInfo(
@@ -136,7 +140,9 @@ final class PlaybackService {
 
     private func buildStreamURL(
         mediaSource: MediaSourceInfo,
-        serverURL: URL?
+        serverURL: URL?,
+        audioStreamIndex: Int? = nil,
+        subtitleStreamIndex: Int? = nil
     ) throws -> (URL, PlayMethod) {
         guard let serverURL else { throw FinnError.notConnected }
         guard let mediaSourceID = mediaSource.id else { throw FinnError.noMediaSource }
@@ -187,13 +193,62 @@ final class PlaybackService {
         if mediaSource.isSupportsTranscoding == true,
            let transcodePath = mediaSource.transcodingURL {
             // transcodingURL is a path with query string (e.g. /videos/.../master.m3u8?params=...)
-            // Use URL(string:relativeTo:) to preserve query parameters correctly
-            if let url = URL(string: transcodePath, relativeTo: serverURL)?.absoluteURL {
+            // The server may return stale SubtitleStreamIndex / AudioStreamIndex values in
+            // this URL (it often ignores the indices we sent in the POST body). Patch them
+            // to match what the caller actually requested.
+            let patchedPath = Self.patchTranscodeQueryParams(
+                transcodePath,
+                audioStreamIndex: audioStreamIndex,
+                subtitleStreamIndex: subtitleStreamIndex
+            )
+            if let url = URL(string: patchedPath, relativeTo: serverURL)?.absoluteURL {
                 return (url, .transcode)
             }
         }
 
         throw FinnError.noMediaSource
+    }
+
+    /// Replace `SubtitleStreamIndex` and `AudioStreamIndex` query parameters in a
+    /// server-provided transcode URL path.  When `subtitleStreamIndex` is `nil` the
+    /// parameter is removed entirely (disables subtitles).  When `audioStreamIndex`
+    /// is `nil` the existing value is left as-is (server default).
+    private static func patchTranscodeQueryParams(
+        _ path: String,
+        audioStreamIndex: Int?,
+        subtitleStreamIndex: Int?
+    ) -> String {
+        // Split into path and query parts
+        guard let questionMark = path.firstIndex(of: "?") else { return path }
+        let basePath = String(path[path.startIndex..<questionMark])
+        let queryString = String(path[path.index(after: questionMark)...])
+
+        // Parse existing query items, filtering out the ones we'll replace
+        var items = queryString
+            .split(separator: "&", omittingEmptySubsequences: true)
+            .map { String($0) }
+            .filter { item in
+                let key = item.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+                if key == "SubtitleStreamIndex" { return false }
+                if key == "AudioStreamIndex" && audioStreamIndex != nil { return false }
+                // When disabling subtitles, also remove SubtitleMethod so the
+                // server doesn't burn in a default subtitle track
+                if key == "SubtitleMethod" && subtitleStreamIndex == nil { return false }
+                return true
+            }
+
+        // Add the requested values
+        if let subIdx = subtitleStreamIndex {
+            items.append("SubtitleStreamIndex=\(subIdx)")
+        }
+        if let audioIdx = audioStreamIndex {
+            items.append("AudioStreamIndex=\(audioIdx)")
+        }
+
+        let result = basePath + "?" + items.joined(separator: "&")
+        print("[SUBS] patchTranscodeQueryParams: sub=\(String(describing: subtitleStreamIndex)) audio=\(String(describing: audioStreamIndex))")
+        print("[SUBS]   patched URL=\(result)")
+        return result
     }
 }
 

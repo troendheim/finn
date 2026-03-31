@@ -105,20 +105,46 @@ final class PlayerViewModel {
                 await loadNextEpisode(seriesID: seriesID, seasonID: seasonID)
             }
 
-            // Get stream info
-            let info = try await playbackService.getStreamInfo(itemID: itemID)
-            streamInfo = info
+            // First, get stream info without specific indices to discover available tracks
+            let initialInfo = try await playbackService.getStreamInfo(itemID: itemID)
 
-            // Setup audio/subtitle tracks
-            audioStreams = PlaybackService.audioStreams(from: info.mediaSource)
-            subtitleStreams = PlaybackService.subtitleStreams(from: info.mediaSource)
-            selectedAudioIndex = info.mediaSource.defaultAudioStreamIndex
-            selectedSubtitleIndex = info.mediaSource.defaultSubtitleStreamIndex
+            // Setup audio/subtitle tracks from initial response
+            audioStreams = PlaybackService.audioStreams(from: initialInfo.mediaSource)
+            subtitleStreams = PlaybackService.subtitleStreams(from: initialInfo.mediaSource)
+            selectedAudioIndex = initialInfo.mediaSource.defaultAudioStreamIndex
+            selectedSubtitleIndex = initialInfo.mediaSource.defaultSubtitleStreamIndex
             updateTrackLabels()
 
-            // Apply preferred audio language
+            // Apply user's preferred language (may change selectedAudioIndex / selectedSubtitleIndex)
             applyPreferredAudioLanguage()
             applyPreferredSubtitleLanguage()
+
+            // Now get the real stream info with the correct audio/subtitle indices so the
+            // server generates the right transcode URL (e.g. correct burned-in subtitle).
+            let info: StreamInfo
+            if selectedAudioIndex != initialInfo.mediaSource.defaultAudioStreamIndex ||
+               selectedSubtitleIndex != initialInfo.mediaSource.defaultSubtitleStreamIndex {
+                info = try await playbackService.getStreamInfo(
+                    itemID: itemID,
+                    audioStreamIndex: selectedAudioIndex,
+                    subtitleStreamIndex: selectedSubtitleIndex
+                )
+                // Re-sync tracks from the final response
+                audioStreams = PlaybackService.audioStreams(from: info.mediaSource)
+                subtitleStreams = PlaybackService.subtitleStreams(from: info.mediaSource)
+                updateTrackLabels()
+            } else {
+                info = initialInfo
+            }
+            streamInfo = info
+
+            print("[SUBS] onAppear: final stream info")
+            print("[SUBS]   playMethod=\(info.playMethod) url=\(info.url.absoluteString)")
+            print("[SUBS]   selectedAudioIndex=\(String(describing: selectedAudioIndex)) selectedSubtitleIndex=\(String(describing: selectedSubtitleIndex))")
+            print("[SUBS]   subtitle streams (\(subtitleStreams.count)):")
+            for s in subtitleStreams {
+                print("[SUBS]     index=\(s.index ?? -1) lang=\(s.language ?? "nil") title=\(s.displayTitle ?? "nil") codec=\(s.codec ?? "nil") isExternal=\(s.isExternal ?? false)")
+            }
 
             // Create player
             let playerItem = AVPlayerItem(url: info.url)
@@ -452,6 +478,10 @@ final class PlayerViewModel {
         selectedSubtitleIndex = index
         updateTrackLabels()
 
+        let stream = index.flatMap { idx in subtitleStreams.first(where: { $0.index == idx }) }
+        print("[SUBS] selectSubtitle called: index=\(String(describing: index)) prev=\(String(describing: previousIndex)) stream=\(stream?.displayTitle ?? "nil") lang=\(stream?.language ?? "nil") codec=\(stream?.codec ?? "nil") isExternal=\(stream?.isExternal ?? false)")
+        print("[SUBS]   playMethod=\(String(describing: streamInfo?.playMethod))")
+
         // Remember subtitle language preference
         if let index {
             if let stream = subtitleStreams.first(where: { $0.index == index }) {
@@ -461,98 +491,37 @@ final class PlayerViewModel {
             jellyfinService.preferredSubtitleLanguage = nil
         }
 
-        guard let player, let currentItem = player.currentItem else { return }
+        guard let player, let currentItem = player.currentItem else {
+            print("[SUBS]   EARLY RETURN: player or currentItem is nil")
+            return
+        }
 
-        // Check if the previously-selected subtitle required a restart
-        let previousNeedsRestart: Bool = {
-            guard let prevIdx = previousIndex,
-                  let prevStream = subtitleStreams.first(where: { $0.index == prevIdx }) else {
-                return false
+        // For transcoded streams the server controls subtitle delivery (burn-in or HLS embed).
+        // The only reliable way to switch subtitles is to restart with the new index so the
+        // server generates a fresh transcode with the correct subtitle.
+        if streamInfo?.playMethod == .transcode {
+            print("[SUBS]   -> PATH: transcode restart with subtitleStreamIndex=\(String(describing: index))")
+            subtitleText = ""
+            currentBurnInSubtitleIndex = nil
+            playerActionTask?.cancel()
+            playerActionTask = Task {
+                await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
             }
-            return PlaybackService.requiresRestart(stream: prevStream)
-        }()
+            return
+        }
 
+        // Direct play / direct stream: subtitle tracks are in the container itself,
+        // so we can switch via AVMediaSelectionGroup without restarting.
         if let index {
-            let subtitleStream = subtitleStreams.first { $0.index == index }
-
-            if let subtitleStream, PlaybackService.requiresBurnIn(stream: subtitleStream) {
-                // Burn-in: restart playback with subtitle index so server burns it into video
-                subtitleText = ""
-                currentBurnInSubtitleIndex = index
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
-                }
-                return
-            }
-
-            if let subtitleStream, PlaybackService.requiresRestart(stream: subtitleStream) {
-                // External subtitle: restart playback so server generates new HLS manifest
-                // with the correct subtitle track embedded
-                subtitleText = ""
-                if currentBurnInSubtitleIndex != nil {
-                    currentBurnInSubtitleIndex = nil
-                }
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
-                }
-                return
-            }
-
-            // Non-burn-in subtitle: if we were previously burning in or using external subs, restart first
-            if currentBurnInSubtitleIndex != nil || previousNeedsRestart {
-                currentBurnInSubtitleIndex = nil
-                subtitleText = ""
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    // Restart with the new subtitle index so the server includes it in the manifest
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
-                }
-                return
-            }
-
-            // Standard embedded subtitle
-            if streamInfo?.playMethod == .transcode {
-                // HLS transcode: the manifest only contains the subtitle track that was
-                // requested when the stream was created. To switch to a different track
-                // we must restart playback so the server generates a new manifest with
-                // the correct subtitle embedded.
-                subtitleText = ""
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
-                }
-            } else {
-                // Direct play/stream: all subtitle tracks are in the container,
-                // so we can select via AVMediaSelectionGroup without restarting.
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    await selectLegibleOption(for: index, on: currentItem)
-                }
+            print("[SUBS]   -> PATH: direct play, selectLegibleOption for index=\(index)")
+            playerActionTask?.cancel()
+            playerActionTask = Task {
+                await selectLegibleOption(for: index, on: currentItem)
             }
         } else {
-            // Subtitles off
-            subtitleText = ""
-            if currentBurnInSubtitleIndex != nil || previousNeedsRestart {
-                // Was using burn-in or external subs — restart without subtitle
-                currentBurnInSubtitleIndex = nil
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
-                }
-                return
-            }
-            if streamInfo?.playMethod == .transcode {
-                // HLS transcode: restart without subtitle to get a clean manifest
-                playerActionTask?.cancel()
-                playerActionTask = Task {
-                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: nil)
-                }
-            } else {
-                Task {
-                    await deselectLegibleOptions(on: currentItem)
-                }
+            print("[SUBS]   -> PATH: direct play, deselect legible (subtitles off)")
+            Task {
+                await deselectLegibleOptions(on: currentItem)
             }
         }
 
@@ -571,7 +540,10 @@ final class PlayerViewModel {
         } else {
             group = asset.mediaSelectionGroup(forMediaCharacteristic: .legible)
         }
-        guard let group else { return }
+        guard let group else {
+            print("[SUBS] selectLegibleOption: NO legible group found in asset")
+            return
+        }
 
         let targetStream = subtitleStreams.first { $0.index == jellyfinIndex }
         let targetTitle = targetStream?.displayTitle
@@ -582,6 +554,13 @@ final class PlayerViewModel {
             Locale(identifier: $0).language.languageCode?.identifier
         }
 
+        print("[SUBS] selectLegibleOption: jellyfinIndex=\(jellyfinIndex) targetTitle=\(targetTitle ?? "nil") targetLang=\(targetLang ?? "nil") rawLang=\(targetStream?.language ?? "nil")")
+        print("[SUBS]   available AVPlayer options (\(group.options.count)):")
+        for (i, opt) in group.options.enumerated() {
+            let lang = opt.locale?.language.languageCode?.identifier ?? "nil"
+            print("[SUBS]     [\(i)] displayName=\"\(opt.displayName)\" lang=\(lang) locale=\(opt.locale?.identifier ?? "nil")")
+        }
+
         // Gather all AVPlayer options that match the target language
         let langMatches: [AVMediaSelectionOption] = targetLang.map { lang in
             group.options.filter { option in
@@ -589,35 +568,36 @@ final class PlayerViewModel {
             }
         } ?? []
 
+        print("[SUBS]   langMatches count=\(langMatches.count)")
+
         let option: AVMediaSelectionOption?
         if langMatches.count == 1 {
-            // Only one track for this language — use it directly
             option = langMatches.first
+            print("[SUBS]   -> single lang match: \(option?.displayName ?? "nil")")
         } else if langMatches.count > 1 {
-            // Multiple tracks share the same language (e.g. English + English SDH).
-            // Use display title to pick the right one, then fall back to positional
-            // ordering: the Nth Jellyfin stream for this language maps to the Nth
-            // AVPlayer option for that language.
             option = langMatches.first { $0.displayName.localizedCaseInsensitiveContains(targetTitle ?? "") }
                 ?? {
-                    // Positional match: count how many earlier Jellyfin subtitle streams
-                    // share the same language to determine which AVPlayer option to pick.
                     let sameLanguageStreams = subtitleStreams.filter { $0.language == targetStream?.language }
                     let position = sameLanguageStreams.firstIndex(where: { $0.index == jellyfinIndex }) ?? 0
+                    print("[SUBS]   -> multi lang match, positional: position=\(position)")
                     return position < langMatches.count ? langMatches[position] : langMatches.first
                 }()
+            print("[SUBS]   -> multi lang match selected: \(option?.displayName ?? "nil")")
         } else {
-            // No language match — try display name, then fall back to first available
             option = group.options.first { opt in
                 if let targetTitle {
                     return opt.displayName.localizedCaseInsensitiveContains(targetTitle)
                 }
                 return false
             } ?? group.options.first
+            print("[SUBS]   -> no lang match, fallback selected: \(option?.displayName ?? "nil")")
         }
 
         if let option {
+            print("[SUBS]   SELECTING option: \(option.displayName)")
             playerItem.select(option, in: group)
+        } else {
+            print("[SUBS]   NO option to select!")
         }
     }
 
@@ -721,28 +701,18 @@ final class PlayerViewModel {
 
     /// Restart playback with different stream parameters (audio/subtitle indices).
     /// Used for burn-in subtitle selection and audio track fallback.
+    /// Keeps the old player visible while loading the new stream to avoid a black flash.
     private func restartPlayback(audioStreamIndex: Int?, subtitleStreamIndex: Int?) async {
+        print("[SUBS] restartPlayback: audioStreamIndex=\(String(describing: audioStreamIndex)) subtitleStreamIndex=\(String(describing: subtitleStreamIndex))")
         let savedTime = currentTime
         let wasPaused = !isPlaying
 
-        // Capture stream info before teardown (teardownPlayer nils it)
+        // Capture references to the old player/session for cleanup
         let previousStreamInfo = streamInfo
+        let oldPlayer = player
+        let oldItem = oldPlayer?.currentItem
 
-        // Tear down current playback
-        teardownPlayer()
-
-        // Report stop with current position
-        if let previousStreamInfo {
-            let ticks = secondsToTicks(savedTime)
-            await playbackService.reportStopped(
-                itemID: itemID,
-                mediaSourceID: previousStreamInfo.mediaSource.id,
-                playSessionID: previousStreamInfo.playSessionID,
-                positionTicks: ticks
-            )
-        }
-
-        isLoading = true
+        // --- Keep the OLD player alive and visible while we fetch the new stream ---
 
         do {
             // Get new stream info with updated indices
@@ -751,27 +721,74 @@ final class PlayerViewModel {
                 audioStreamIndex: audioStreamIndex,
                 subtitleStreamIndex: subtitleStreamIndex
             )
-            streamInfo = info
 
-            // Update tracks from new media source
+            print("[SUBS] restartPlayback: got new stream info")
+            print("[SUBS]   playMethod=\(info.playMethod) url=\(info.url.absoluteString)")
+            print("[SUBS]   transcodingURL=\(info.mediaSource.transcodingURL ?? "nil")")
+            let newSubStreams = PlaybackService.subtitleStreams(from: info.mediaSource)
+            print("[SUBS]   subtitle streams in new mediaSource (\(newSubStreams.count)):")
+            for s in newSubStreams {
+                print("[SUBS]     index=\(s.index ?? -1) lang=\(s.language ?? "nil") title=\(s.displayTitle ?? "nil") codec=\(s.codec ?? "nil") isExternal=\(s.isExternal ?? false)")
+            }
+
+            // Prepare the new player item and seek BEFORE swapping
+            let playerItem = AVPlayerItem(url: info.url)
+            let avPlayer = AVPlayer(playerItem: playerItem)
+            if savedTime > 0 {
+                await avPlayer.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
+            }
+
+            // --- Clean up old player resources ---
+            progressTimer?.cancel()
+            countdownTask?.cancel()
+            retryTask?.cancel()
+            scrubTask?.cancel()
+            controlsHideTask?.cancel()
+            seekCommitTask?.cancel()
+            statusObservation?.invalidate()
+            statusObservation = nil
+            timeControlObservation?.invalidate()
+            timeControlObservation = nil
+            if let endObservation {
+                NotificationCenter.default.removeObserver(endObservation)
+                self.endObservation = nil
+            }
+            subtitleCancellable?.cancel()
+            subtitleCancellable = nil
+            if let oldItem {
+                subtitleRenderer.detach(from: oldItem)
+            }
+            if let observer = timeObserver {
+                oldPlayer?.removeTimeObserver(observer)
+                timeObserver = nil
+            }
+            oldPlayer?.pause()
+
+            // Report stop for the old session
+            if let previousStreamInfo {
+                let ticks = secondsToTicks(savedTime)
+                await playbackService.reportStopped(
+                    itemID: itemID,
+                    mediaSourceID: previousStreamInfo.mediaSource.id,
+                    playSessionID: previousStreamInfo.playSessionID,
+                    positionTicks: ticks
+                )
+            }
+
+            // --- Swap in the new player (view instantly shows new video frame) ---
+            streamInfo = info
             audioStreams = PlaybackService.audioStreams(from: info.mediaSource)
             subtitleStreams = PlaybackService.subtitleStreams(from: info.mediaSource)
             updateTrackLabels()
 
-            // Create new player
-            let playerItem = AVPlayerItem(url: info.url)
+            // Attach subtitle renderer to the new item
+            subtitleRenderer.attach(to: playerItem)
+            subtitleCancellable = subtitleRenderer.$currentText
+                .receive(on: DispatchQueue.main)
+                .sink { [weak self] text in
+                    self?.subtitleText = text
+                }
 
-            // Only attach subtitle renderer if not using burn-in
-            if currentBurnInSubtitleIndex == nil {
-                subtitleRenderer.attach(to: playerItem)
-                subtitleCancellable = subtitleRenderer.$currentText
-                    .receive(on: DispatchQueue.main)
-                    .sink { [weak self] text in
-                        self?.subtitleText = text
-                    }
-            }
-
-            let avPlayer = AVPlayer(playerItem: playerItem)
             self.player = avPlayer
 
             // Observe errors
@@ -787,12 +804,7 @@ final class PlayerViewModel {
                 }
             }
 
-            // Seek to saved position
-            if savedTime > 0 {
-                await avPlayer.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
-            }
-
-            // Observe playback end (register before play to avoid race with short content)
+            // Observe playback end
             endObservation = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: playerItem,
@@ -810,7 +822,6 @@ final class PlayerViewModel {
             } else {
                 isPlaying = false
             }
-            isLoading = false
 
             // Re-setup observers
             setupTimeObserver(avPlayer)
@@ -818,7 +829,10 @@ final class PlayerViewModel {
 
             // Re-select non-burn-in subtitle if active
             if currentBurnInSubtitleIndex == nil, let subIndex = selectedSubtitleIndex {
+                print("[SUBS] restartPlayback: re-selecting legible option for subIndex=\(subIndex)")
                 await selectLegibleOption(for: subIndex, on: playerItem)
+            } else {
+                print("[SUBS] restartPlayback: NOT re-selecting legible (burnIn=\(String(describing: currentBurnInSubtitleIndex)) selectedSub=\(String(describing: selectedSubtitleIndex)))")
             }
 
             // Report start
@@ -833,6 +847,8 @@ final class PlayerViewModel {
             startProgressReporting()
 
         } catch {
+            // On error, tear down the old player (which is still running) and show error
+            teardownPlayer()
             self.error = "Failed to restart playback: \(error.localizedDescription)"
             isLoading = false
         }
