@@ -22,8 +22,8 @@ struct LandscapeCard: View {
                 Rectangle().fill(.gray.opacity(0.2))
             }
 
+            // Text overlay — full-width Liquid Glass bar at bottom
             VStack(spacing: 0) {
-                // Text overlay — full-width Liquid Glass bar at bottom
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
                         if let episodeLabel = item.episodeLabel {
@@ -47,16 +47,17 @@ struct LandscapeCard: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-                .liquidGlass(in: 0)
 
-                // Progress bar at very bottom, below the glass bar
+                // Progress bar inside the glass bar so it renders on top
                 if item.playbackProgress > 0 {
                     Rectangle()
                         .fill(.red)
-                        .frame(width: cardWidth * item.playbackProgress, height: 4)
+                        .frame(height: 4)
+                        .frame(width: cardWidth * item.playbackProgress, alignment: .leading)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
+            .liquidGlass(in: 0)
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
