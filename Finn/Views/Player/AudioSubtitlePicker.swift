@@ -104,6 +104,7 @@ struct AudioSubtitlePicker: View {
                 .padding(50)
                 .frame(maxHeight: 500)
                 .liquidGlass(in: 20)
+                .liquidGlassContainer(spacing: 12)
                 .padding(.horizontal, 80)
                 .padding(.bottom, 60)
             }
@@ -136,7 +137,8 @@ struct AudioSubtitlePicker: View {
 // MARK: - Track Button
 
 /// A focusable button for track selection that works with tvOS focus navigation.
-/// Uses .card style on tvOS so the focus engine handles highlight/navigation naturally.
+/// Uses Liquid Glass `.glass` button style so the focus engine highlights via glass
+/// instead of the `.card` scale-up effect (which overflows the panel bounds).
 private struct TrackButton: View {
     let title: String
     let detail: String?
@@ -166,13 +168,7 @@ private struct TrackButton: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(isSelected ? Color.red.opacity(0.15) : Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color.red.opacity(0.4) : Color.clear, lineWidth: 2)
-            )
         }
-        .tvCardButton()
+        .glassButtonStyle()
     }
 }
