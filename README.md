@@ -1,6 +1,7 @@
 # Finn
 
 A Jellyfin client for Apple TV, built with SwiftUI.
+Currently work in progress :-)
 
 ## What it does
 
