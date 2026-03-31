@@ -67,6 +67,7 @@ final class PlayerViewModel {
     private let jellyfinService: JellyfinService
     private let playbackService: PlaybackService
     private var countdownTask: Task<Void, Never>?
+    private var toastTask: Task<Void, Never>?
 
     // MARK: - Continuous Scrub (hold to fast-forward/rewind)
 
@@ -150,7 +151,8 @@ final class PlayerViewModel {
                 resumeTimeDisplay = TimeFormatting.playerTime(seconds: seconds)
                 showResumeToast = true
                 // Hide toast after 3 seconds
-                Task {
+                toastTask?.cancel()
+                toastTask = Task {
                     try? await Task.sleep(for: .seconds(3))
                     showResumeToast = false
                 }
@@ -219,6 +221,7 @@ final class PlayerViewModel {
     private func teardownPlayer() {
         progressTimer?.cancel()
         countdownTask?.cancel()
+        toastTask?.cancel()
         scrubTask?.cancel()
         controlsHideTask?.cancel()
         seekCommitTask?.cancel()
@@ -477,7 +480,7 @@ final class PlayerViewModel {
     /// Select a legible (subtitle) media option by matching Jellyfin stream index
     /// to AVMediaSelectionOptions available in the HLS manifest.
     private func selectLegibleOption(for jellyfinIndex: Int, on playerItem: AVPlayerItem) async {
-        guard let asset = playerItem.asset as? AVURLAsset ?? Optional(playerItem.asset) else { return }
+        let asset = playerItem.asset
 
         // Load the legible media selection group
         let group: AVMediaSelectionGroup?
