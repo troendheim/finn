@@ -6,6 +6,7 @@ struct HomeView: View {
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
     @State private var showSettings = false
+    @State private var hasAppeared = false
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
@@ -113,6 +114,13 @@ struct HomeView: View {
         }
         .task {
             await viewModel.loadAll()
+            hasAppeared = true
+        }
+        .onAppear {
+            // Refresh data when returning from navigation (player, detail views)
+            if hasAppeared {
+                Task { await viewModel.refresh() }
+            }
         }
         .refreshable {
             await viewModel.refresh()
