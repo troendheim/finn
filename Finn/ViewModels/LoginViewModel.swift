@@ -65,6 +65,7 @@ final class LoginViewModel {
         do {
             try await jellyfinService.signIn(username: loginUsername, password: password)
             isLoggedIn = true
+            password = ""
         } catch {
             self.error = "Login failed. Check your credentials."
         }
