@@ -11,4 +11,6 @@ build/
 .claude/
 .junie/
 .opencode/
+.superpowers/
+docs/superpowers/
 skills-lock.json
