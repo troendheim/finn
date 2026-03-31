@@ -424,6 +424,7 @@ final class PlayerViewModel {
     }
 
     func selectSubtitle(index: Int?) {
+        let previousIndex = selectedSubtitleIndex
         selectedSubtitleIndex = index
         updateTrackLabels()
 
@@ -437,6 +438,15 @@ final class PlayerViewModel {
         }
 
         guard let player, let currentItem = player.currentItem else { return }
+
+        // Check if the previously-selected subtitle required a restart
+        let previousNeedsRestart: Bool = {
+            guard let prevIdx = previousIndex,
+                  let prevStream = subtitleStreams.first(where: { $0.index == prevIdx }) else {
+                return false
+            }
+            return PlaybackService.requiresRestart(stream: prevStream)
+        }()
 
         if let index {
             let subtitleStream = subtitleStreams.first { $0.index == index }
@@ -452,8 +462,22 @@ final class PlayerViewModel {
                 return
             }
 
-            // Non-burn-in subtitle: if we were previously burning in, restart without burn-in first
-            if currentBurnInSubtitleIndex != nil {
+            if let subtitleStream, PlaybackService.requiresRestart(stream: subtitleStream) {
+                // External subtitle: restart playback so server generates new HLS manifest
+                // with the correct subtitle track embedded
+                subtitleText = ""
+                if currentBurnInSubtitleIndex != nil {
+                    currentBurnInSubtitleIndex = nil
+                }
+                playerActionTask?.cancel()
+                playerActionTask = Task {
+                    await restartPlayback(audioStreamIndex: selectedAudioIndex, subtitleStreamIndex: index)
+                }
+                return
+            }
+
+            // Non-burn-in subtitle: if we were previously burning in or using external subs, restart first
+            if currentBurnInSubtitleIndex != nil || previousNeedsRestart {
                 currentBurnInSubtitleIndex = nil
                 subtitleText = ""
                 playerActionTask?.cancel()
@@ -475,8 +499,8 @@ final class PlayerViewModel {
         } else {
             // Subtitles off
             subtitleText = ""
-            if currentBurnInSubtitleIndex != nil {
-                // Was burning in — restart without burn-in
+            if currentBurnInSubtitleIndex != nil || previousNeedsRestart {
+                // Was using burn-in or external subs — restart without subtitle
                 currentBurnInSubtitleIndex = nil
                 playerActionTask?.cancel()
                 playerActionTask = Task {

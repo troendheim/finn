@@ -266,11 +266,18 @@ struct PlayerView: View {
                         Text("\(viewModel.currentAudioLabel) \u{00B7} Subtitles: \(viewModel.currentSubtitleLabel)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Text("Swipe down for audio & subtitles")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary.opacity(0.7))
                     }
                     Spacer()
+                    #if os(tvOS)
+                    Button {
+                        viewModel.isControlsVisible = false
+                        viewModel.isPickerVisible = true
+                    } label: {
+                        Image(systemName: "captions.bubble")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+                    #endif
                     VStack(alignment: .trailing) {
                         Text("\(TimeFormatting.playerTime(seconds: viewModel.currentTime)) / \(TimeFormatting.playerTime(seconds: viewModel.duration))")
                             .font(.callout)

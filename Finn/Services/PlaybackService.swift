@@ -125,6 +125,13 @@ final class PlaybackService {
         return burnInCodecs.contains(codec)
     }
 
+    /// Check if a subtitle stream requires a playback restart to switch to.
+    /// External subtitles need a restart so the server generates a new HLS manifest
+    /// with the correct subtitle embedded. Burn-in subtitles also need a restart.
+    static func requiresRestart(stream: MediaStream) -> Bool {
+        return requiresBurnIn(stream: stream) || stream.isExternal == true
+    }
+
     // MARK: - Private
 
     private func buildStreamURL(
