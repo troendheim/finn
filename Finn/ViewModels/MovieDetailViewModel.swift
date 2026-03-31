@@ -8,6 +8,7 @@ final class MovieDetailViewModel {
     var isLoading = false
     var error: String?
     var isFavorite = false
+    var actionError: String?
 
     let itemID: String
     private let jellyfinService: JellyfinService
@@ -41,7 +42,7 @@ final class MovieDetailViewModel {
             }
             isFavorite.toggle()
         } catch {
-            // Revert on failure — will be reflected next load
+            actionError = "Failed to update favorite"
         }
     }
 

@@ -12,6 +12,7 @@ final class SeriesDetailViewModel {
     var isLoadingEpisodes = false
     var error: String?
     var isFavorite = false
+    var actionError: String?
 
     let itemID: String
     private let jellyfinService: JellyfinService
@@ -68,7 +69,29 @@ final class SeriesDetailViewModel {
                 try await jellyfinService.markFavorite(itemID: id)
             }
             isFavorite.toggle()
-        } catch {}
+        } catch {
+            actionError = "Failed to update favorite"
+        }
+    }
+
+    /// Toggle the played/watched status of an episode
+    func togglePlayed(episode: BaseItemDto) async {
+        guard let episodeID = episode.id else { return }
+        do {
+            if episode.isWatched {
+                try await jellyfinService.markUnplayed(itemID: episodeID)
+            } else {
+                try await jellyfinService.markPlayed(itemID: episodeID)
+            }
+            // Update local state by finding and replacing the episode
+            if let index = episodes.firstIndex(where: { $0.id == episodeID }) {
+                // Reload the episode to get fresh userData
+                let updated = try await jellyfinService.getItem(id: episodeID)
+                episodes[index] = updated
+            }
+        } catch {
+            actionError = "Failed to update watch status"
+        }
     }
 
     /// The episode the user should continue/start watching
