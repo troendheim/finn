@@ -39,7 +39,7 @@ struct ServerConnectView: View {
                     }
                 }
                 .glassButtonStyle(prominent: true)
-                .disabled(viewModel.isConnecting)
+                .disabled(viewModel.isConnecting || viewModel.serverURLText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
 
                 if viewModel.isInsecureWarning {
                     Label("Insecure connection (HTTP). Your data will not be encrypted.", systemImage: "lock.open")
