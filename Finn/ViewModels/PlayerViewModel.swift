@@ -750,8 +750,24 @@ final class PlayerViewModel {
         nextEpisode = nil
         isPlaybackComplete = false
 
-        // Start the new episode
+        // Preserve user's manual audio/subtitle choices across episode reloads
+        // so onAppear's applyPreferred*Language() doesn't override them.
+        let userAudioIndex = selectedAudioIndex
+        let userSubtitleIndex = selectedSubtitleIndex
+
+        // Start the new episode (this calls onAppear which applies defaults)
         await onAppear()
+
+        // If the user had manually selected tracks, restore those choices
+        // rather than the preference-based defaults that onAppear applied.
+        if userAudioIndex != selectedAudioIndex || userSubtitleIndex != selectedSubtitleIndex {
+            if userAudioIndex != selectedAudioIndex, let idx = userAudioIndex {
+                selectAudio(index: idx)
+            }
+            if userSubtitleIndex != selectedSubtitleIndex {
+                selectSubtitle(index: userSubtitleIndex)
+            }
+        }
     }
 
     /// Restart playback with different stream parameters (audio/subtitle indices).
