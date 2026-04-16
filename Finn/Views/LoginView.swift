@@ -99,7 +99,7 @@ struct LoginView: View {
     @ViewBuilder
     private func userAvatar(_ user: UserDto) -> some View {
         if let id = user.id, let url = imageService?.posterURL(itemID: id, maxWidth: 150) {
-            AsyncImage(url: url) { image in
+            CachedAsyncImage(url: url) { image in
                 image.resizable().scaledToFill()
             } placeholder: {
                 userInitial(user)

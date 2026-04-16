@@ -82,7 +82,7 @@ struct SeriesDetailView: View {
         ZStack(alignment: .bottomLeading) {
             // Backdrop
             if let id = item.id, let url = imageService?.backdropURL(itemID: id) {
-                AsyncImage(url: url) { image in
+                CachedAsyncImage(url: url) { image in
                     image.resizable().scaledToFill()
                         .frame(height: 500)
                         .clipped()
