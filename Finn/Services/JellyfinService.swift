@@ -132,7 +132,7 @@ final class JellyfinService {
 
     /// Continue Watching — partially watched items
     func getResumeItems() async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetResumeItemsParameters(
             userID: currentUserID,
             limit: 20,
@@ -148,7 +148,7 @@ final class JellyfinService {
 
     /// Next Up — next unwatched episode for in-progress series
     func getNextUp() async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetNextUpParameters(
             userID: currentUserID,
             limit: 20,
@@ -165,7 +165,7 @@ final class JellyfinService {
 
     /// Next Up for a specific series — cross-season next episode
     func getNextUp(seriesID: String) async throws -> BaseItemDto? {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetNextUpParameters(
             userID: currentUserID,
             limit: 1,
@@ -183,7 +183,7 @@ final class JellyfinService {
 
     /// Recently Added — newest content
     func getLatestMedia() async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetLatestMediaParameters(
             userID: currentUserID,
             fields: [.overview],
@@ -199,7 +199,7 @@ final class JellyfinService {
 
     /// Get genre list
     func getGenres() async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetGenresParameters(
             includeItemTypes: [.movie, .series],
             userID: currentUserID
@@ -210,7 +210,7 @@ final class JellyfinService {
 
     /// Items for a specific genre
     func getItemsByGenre(genreID: String) async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetItemsParameters(
             userID: currentUserID,
             limit: 20,
@@ -230,7 +230,7 @@ final class JellyfinService {
 
     /// Single item detail
     func getItem(id: String) async throws -> BaseItemDto {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         return try await client.send(
             Paths.getItem(itemID: id, userID: currentUserID)
         ).value
@@ -238,7 +238,7 @@ final class JellyfinService {
 
     /// Seasons for a series
     func getSeasons(seriesID: String) async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetSeasonsParameters(
             userID: currentUserID,
             fields: [.overview],
@@ -255,7 +255,7 @@ final class JellyfinService {
 
     /// Episodes for a season
     func getEpisodes(seriesID: String, seasonID: String) async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetEpisodesParameters(
             userID: currentUserID,
             fields: [.overview, .mediaSources, .mediaStreams],
@@ -273,7 +273,7 @@ final class JellyfinService {
 
     /// Search
     func search(query: String) async throws -> [BaseItemDto] {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetItemsParameters(
             userID: currentUserID,
             limit: 30,
@@ -293,14 +293,14 @@ final class JellyfinService {
     // MARK: - Favorites
 
     func markFavorite(itemID: String) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let _ = try await client.send(
             Paths.markFavoriteItem(itemID: itemID, userID: currentUserID)
         ).value
     }
 
     func unmarkFavorite(itemID: String) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let _ = try await client.send(
             Paths.unmarkFavoriteItem(itemID: itemID, userID: currentUserID)
         ).value
@@ -310,7 +310,7 @@ final class JellyfinService {
 
     /// Mark an item as fully played/watched
     func markPlayed(itemID: String) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let _ = try await client.send(
             Paths.markPlayedItem(itemID: itemID, userID: currentUserID)
         ).value
@@ -318,7 +318,7 @@ final class JellyfinService {
 
     /// Mark an item as unplayed/unwatched
     func markUnplayed(itemID: String) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let _ = try await client.send(
             Paths.markUnplayedItem(itemID: itemID, userID: currentUserID)
         ).value
@@ -331,7 +331,7 @@ final class JellyfinService {
         audioStreamIndex: Int? = nil,
         subtitleStreamIndex: Int? = nil
     ) async throws -> PlaybackInfoResponse {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
 
         // Build a device profile so the server knows what Apple TV / AVPlayer can handle.
         // Without this, the server can't determine direct play compatibility or produce
@@ -406,17 +406,17 @@ final class JellyfinService {
     // MARK: - Progress Reporting
 
     func reportPlaybackStart(info: PlaybackStartInfo) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         try await client.send(Paths.reportPlaybackStart(info))
     }
 
     func reportPlaybackProgress(info: PlaybackProgressInfo) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         try await client.send(Paths.reportPlaybackProgress(info))
     }
 
     func reportPlaybackStopped(info: PlaybackStopInfo) async throws {
-        guard let client else { throw FinnError.notConnected }
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
         try await client.send(Paths.reportPlaybackStopped(info))
     }
 
