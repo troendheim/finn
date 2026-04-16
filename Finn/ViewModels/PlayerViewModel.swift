@@ -674,8 +674,19 @@ final class PlayerViewModel {
 
     /// Tears down the current playback and starts a new episode without navigation.
     private func loadEpisodeInPlace(_ newItemID: String) async {
-        // Clean up current playback
-        await onDisappear()
+        // Clean up current playback without cancelling playerActionTask
+        // (we are running inside it)
+        player?.pause()
+
+        let ticks = secondsToTicks(currentTime)
+        await playbackService.reportStopped(
+            itemID: itemID,
+            mediaSourceID: streamInfo?.mediaSource.id,
+            playSessionID: streamInfo?.playSessionID,
+            positionTicks: ticks
+        )
+
+        teardownPlayer()
 
         // Reset state
         itemID = newItemID
