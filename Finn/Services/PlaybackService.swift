@@ -44,7 +44,8 @@ final class PlaybackService {
             url: url,
             playMethod: playMethod,
             mediaSource: mediaSource,
-            playSessionID: playSessionID
+            playSessionID: playSessionID,
+            accessToken: jellyfinService.client?.accessToken
         )
     }
 
@@ -146,6 +147,7 @@ final class PlaybackService {
     ) throws -> (URL, PlayMethod) {
         guard let serverURL else { throw FinnError.notConnected }
         guard let mediaSourceID = mediaSource.id else { throw FinnError.noMediaSource }
+        let escapedMediaSourceID = mediaSourceID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? mediaSourceID
 
         // Check for direct play compatibility
         let containerFormats = Set(
@@ -161,11 +163,10 @@ final class PlaybackService {
             guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
                 throw FinnError.noMediaSource
             }
-            components.path += "/Videos/\(mediaSourceID)/stream"
+            components.path += "/Videos/\(escapedMediaSourceID)/stream"
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
-                URLQueryItem(name: "api_key", value: jellyfinService.client?.accessToken)
             ]
             if let url = components.url {
                 return (url, .directPlay)
@@ -178,11 +179,10 @@ final class PlaybackService {
             guard var components = URLComponents(url: serverURL, resolvingAgainstBaseURL: false) else {
                 throw FinnError.noMediaSource
             }
-            components.path += "/Videos/\(mediaSourceID)/stream"
+            components.path += "/Videos/\(escapedMediaSourceID)/stream"
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
-                URLQueryItem(name: "api_key", value: jellyfinService.client?.accessToken)
             ]
             if let url = components.url {
                 return (url, .directStream)
@@ -259,4 +259,5 @@ struct StreamInfo {
     let playMethod: PlayMethod
     let mediaSource: MediaSourceInfo
     let playSessionID: String?
+    let accessToken: String?
 }

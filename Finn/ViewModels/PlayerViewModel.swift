@@ -85,6 +85,9 @@ final class PlayerViewModel {
     // MARK: - Lifecycle
 
     func onAppear() async {
+        // Guard against double invocation from SwiftUI lifecycle quirks
+        guard player == nil else { return }
+
         // Configure audio session for media playback
         #if os(tvOS)
         do {
@@ -146,8 +149,16 @@ final class PlayerViewModel {
                 print("[SUBS]     index=\(s.index ?? -1) lang=\(s.language ?? "nil") title=\(s.displayTitle ?? "nil") codec=\(s.codec ?? "nil") isExternal=\(s.isExternal ?? false)")
             }
 
-            // Create player
-            let playerItem = AVPlayerItem(url: info.url)
+            // Create player — pass token via Authorization header instead of URL query
+            let asset: AVURLAsset
+            if let token = info.accessToken {
+                asset = AVURLAsset(url: info.url, options: [
+                    "AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "MediaBrowser Token=\"\(token)\""]
+                ])
+            } else {
+                asset = AVURLAsset(url: info.url)
+            }
+            let playerItem = AVPlayerItem(asset: asset)
 
             // Attach subtitle renderer to receive legible output
             subtitleRenderer.attach(to: playerItem)
@@ -743,7 +754,15 @@ final class PlayerViewModel {
             }
 
             // Prepare the new player item and seek BEFORE swapping
-            let playerItem = AVPlayerItem(url: info.url)
+            let restartAsset: AVURLAsset
+            if let token = info.accessToken {
+                restartAsset = AVURLAsset(url: info.url, options: [
+                    "AVURLAssetHTTPHeaderFieldsKey": ["Authorization": "MediaBrowser Token=\"\(token)\""]
+                ])
+            } else {
+                restartAsset = AVURLAsset(url: info.url)
+            }
+            let playerItem = AVPlayerItem(asset: restartAsset)
             let avPlayer = AVPlayer(playerItem: playerItem)
             if savedTime > 0 {
                 await avPlayer.seek(to: CMTime(seconds: savedTime, preferredTimescale: 600))
@@ -876,7 +895,8 @@ final class PlayerViewModel {
         let interval = CMTime(seconds: 0.5, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             guard let self else { return }
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
                 self.currentTime = time.seconds
                 if let dur = self.player?.currentItem?.duration, dur.isNumeric {
                     self.duration = dur.seconds
