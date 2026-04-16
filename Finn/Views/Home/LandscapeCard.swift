@@ -61,5 +61,6 @@ struct LandscapeCard: View {
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityLabel(item.name ?? "Unknown")
     }
 }

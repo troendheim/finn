@@ -45,5 +45,6 @@ struct PosterCard: View {
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityLabel(item.name ?? "Unknown")
     }
 }
