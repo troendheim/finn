@@ -43,6 +43,8 @@ final class JellyfinService {
     // MARK: - Init
 
     init() {
+        self.preferredAudioLanguage = UserDefaults.standard.string(forKey: Keys.preferredAudioLanguage)
+        self.preferredSubtitleLanguage = UserDefaults.standard.string(forKey: Keys.preferredSubtitleLanguage)
         restoreSession()
     }
 
@@ -415,15 +417,13 @@ final class JellyfinService {
     // MARK: - Audio Preference
 
     var preferredAudioLanguage: String? {
-        get { UserDefaults.standard.string(forKey: Keys.preferredAudioLanguage) }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.preferredAudioLanguage) }
+        didSet { UserDefaults.standard.set(preferredAudioLanguage, forKey: Keys.preferredAudioLanguage) }
     }
 
     // MARK: - Subtitle Preference
 
     var preferredSubtitleLanguage: String? {
-        get { UserDefaults.standard.string(forKey: Keys.preferredSubtitleLanguage) }
-        set { UserDefaults.standard.set(newValue, forKey: Keys.preferredSubtitleLanguage) }
+        didSet { UserDefaults.standard.set(preferredSubtitleLanguage, forKey: Keys.preferredSubtitleLanguage) }
     }
 
     // MARK: - Private
@@ -447,7 +447,8 @@ final class JellyfinService {
         self.client = JellyfinClient(configuration: config)
         self.serverURL = url
         self.currentUserID = userID
-        self.isAuthenticated = true
+        // Don't set isAuthenticated = true here; wait for validateSession()
+        // to confirm the token is still valid.
         self.currentUserName = UserDefaults.standard.string(forKey: Keys.userName)
     }
 
@@ -455,9 +456,10 @@ final class JellyfinService {
     /// If the token is expired or revoked, signs out so the user sees
     /// the login screen instead of empty/broken content.
     func validateSession() async {
-        guard isAuthenticated, client != nil else { return }
+        guard client != nil, currentUserID != nil else { return }
         do {
             let _ = try await client?.send(Paths.getCurrentUser).value
+            isAuthenticated = true
         } catch {
             await signOut()
         }
