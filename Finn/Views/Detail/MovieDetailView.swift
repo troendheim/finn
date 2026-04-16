@@ -162,6 +162,10 @@ struct MovieDetailView: View {
             }
         }
         .animation(.easeInOut, value: viewModel.actionError)
+        .onDisappear {
+            errorDismissTask?.cancel()
+            errorDismissTask = nil
+        }
     }
 
     @ViewBuilder
