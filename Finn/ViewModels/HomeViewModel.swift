@@ -70,14 +70,23 @@ final class HomeViewModel {
         error = nil
 
         // Load main rows concurrently with individual error handling
-        async let resumeResult: [BaseItemDto] = loadSection { try await jellyfinService.getResumeItems() }
-        async let nextUpResult: [BaseItemDto] = loadSection { try await jellyfinService.getNextUp() }
-        async let latestResult: [BaseItemDto] = loadSection { try await jellyfinService.getLatestMedia() }
+        var sectionErrors: [Error] = []
+        async let resumeResult = loadSection { try await jellyfinService.getResumeItems() }
+        async let nextUpResult = loadSection { try await jellyfinService.getNextUp() }
+        async let latestResult = loadSection { try await jellyfinService.getLatestMedia() }
 
         let results = await (resumeResult, nextUpResult, latestResult)
-        continueWatching = results.0
-        nextUp = results.1
-        latestMedia = results.2
+        continueWatching = results.0.items
+        if let e = results.0.error { sectionErrors.append(e) }
+        nextUp = results.1.items
+        if let e = results.1.error { sectionErrors.append(e) }
+        latestMedia = results.2.items
+        if let e = results.2.error { sectionErrors.append(e) }
+
+        // If all main sections failed, surface an error with retry
+        if sectionErrors.count == 3 {
+            error = sectionErrors.first?.localizedDescription ?? "Failed to load content"
+        }
 
         // Main content is ready — stop showing the spinner
         isLoading = false
@@ -112,22 +121,22 @@ final class HomeViewModel {
     /// (Continue Watching and Next Up). Genre rows and Recently Added are
     /// left untouched since they rarely change mid-session.
     private func refreshPlaybackRows() async {
-        async let resumeResult: [BaseItemDto] = loadSection { try await jellyfinService.getResumeItems() }
-        async let nextUpResult: [BaseItemDto] = loadSection { try await jellyfinService.getNextUp() }
+        async let resumeResult = loadSection { try await jellyfinService.getResumeItems() }
+        async let nextUpResult = loadSection { try await jellyfinService.getNextUp() }
 
         let results = await (resumeResult, nextUpResult)
-        continueWatching = results.0
-        nextUp = results.1
+        continueWatching = results.0.items
+        nextUp = results.1.items
     }
 
     // MARK: - Private
 
     /// Load a section, returning empty array on failure instead of throwing.
-    private func loadSection(_ fetch: () async throws -> [BaseItemDto]) async -> [BaseItemDto] {
+    private func loadSection(_ fetch: () async throws -> [BaseItemDto]) async -> (items: [BaseItemDto], error: Error?) {
         do {
-            return try await fetch()
+            return (try await fetch(), nil)
         } catch {
-            return []
+            return ([], error)
         }
     }
 
