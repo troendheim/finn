@@ -17,7 +17,7 @@ struct ContentRow<Card: View>: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 40) {
-                        ForEach(items, id: \.id) { item in
+                        ForEach(items.filter { $0.id != nil }, id: \.id) { item in
                             Button {
                                 onSelect(item)
                             } label: {

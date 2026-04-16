@@ -69,6 +69,10 @@ struct SeriesDetailView: View {
             }
         }
         .animation(.easeInOut, value: viewModel.actionError)
+        .onDisappear {
+            errorDismissTask?.cancel()
+            errorDismissTask = nil
+        }
     }
 
     // MARK: - Header
@@ -181,7 +185,7 @@ struct SeriesDetailView: View {
                 ProgressView()
                     .padding(.top, 40)
             } else {
-                ForEach(viewModel.episodes, id: \.id) { episode in
+                ForEach(viewModel.episodes.filter { $0.id != nil }, id: \.id) { episode in
                     Button {
                         if let id = episode.id {
                             navigationPath.append(AppDestination.player(itemID: id))

@@ -41,7 +41,7 @@ struct SearchView: View {
         } else {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 40) {
-                    ForEach(viewModel.results, id: \.id) { item in
+                    ForEach(viewModel.results.filter { $0.id != nil }, id: \.id) { item in
                         Button {
                             navigateToDetail(item)
                         } label: {
