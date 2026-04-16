@@ -141,6 +141,7 @@ final class PlayerViewModel {
             }
             streamInfo = info
 
+            #if DEBUG
             print("[SUBS] onAppear: final stream info")
             print("[SUBS]   playMethod=\(info.playMethod) url=\(info.url.absoluteString)")
             print("[SUBS]   selectedAudioIndex=\(String(describing: selectedAudioIndex)) selectedSubtitleIndex=\(String(describing: selectedSubtitleIndex))")
@@ -148,6 +149,7 @@ final class PlayerViewModel {
             for s in subtitleStreams {
                 print("[SUBS]     index=\(s.index ?? -1) lang=\(s.language ?? "nil") title=\(s.displayTitle ?? "nil") codec=\(s.codec ?? "nil") isExternal=\(s.isExternal ?? false)")
             }
+            #endif
 
             // Create player — pass token via Authorization header instead of URL query
             let asset: AVURLAsset
@@ -490,8 +492,10 @@ final class PlayerViewModel {
         updateTrackLabels()
 
         let stream = index.flatMap { idx in subtitleStreams.first(where: { $0.index == idx }) }
+        #if DEBUG
         print("[SUBS] selectSubtitle called: index=\(String(describing: index)) prev=\(String(describing: previousIndex)) stream=\(stream?.displayTitle ?? "nil") lang=\(stream?.language ?? "nil") codec=\(stream?.codec ?? "nil") isExternal=\(stream?.isExternal ?? false)")
         print("[SUBS]   playMethod=\(String(describing: streamInfo?.playMethod))")
+        #endif
 
         // Remember subtitle language preference
         if let index {
@@ -503,7 +507,9 @@ final class PlayerViewModel {
         }
 
         guard let player, let currentItem = player.currentItem else {
+            #if DEBUG
             print("[SUBS]   EARLY RETURN: player or currentItem is nil")
+            #endif
             return
         }
 
@@ -511,7 +517,9 @@ final class PlayerViewModel {
         // The only reliable way to switch subtitles is to restart with the new index so the
         // server generates a fresh transcode with the correct subtitle.
         if streamInfo?.playMethod == .transcode {
+            #if DEBUG
             print("[SUBS]   -> PATH: transcode restart with subtitleStreamIndex=\(String(describing: index))")
+            #endif
             subtitleText = ""
             currentBurnInSubtitleIndex = nil
             playerActionTask?.cancel()
@@ -524,13 +532,17 @@ final class PlayerViewModel {
         // Direct play / direct stream: subtitle tracks are in the container itself,
         // so we can switch via AVMediaSelectionGroup without restarting.
         if let index {
+            #if DEBUG
             print("[SUBS]   -> PATH: direct play, selectLegibleOption for index=\(index)")
+            #endif
             playerActionTask?.cancel()
             playerActionTask = Task {
                 await selectLegibleOption(for: index, on: currentItem)
             }
         } else {
+            #if DEBUG
             print("[SUBS]   -> PATH: direct play, deselect legible (subtitles off)")
+            #endif
             playerActionTask?.cancel()
             playerActionTask = Task {
                 await deselectLegibleOptions(on: currentItem)
@@ -553,7 +565,9 @@ final class PlayerViewModel {
             group = asset.mediaSelectionGroup(forMediaCharacteristic: .legible)
         }
         guard let group else {
+            #if DEBUG
             print("[SUBS] selectLegibleOption: NO legible group found in asset")
+            #endif
             return
         }
 
@@ -566,11 +580,15 @@ final class PlayerViewModel {
             Locale(identifier: $0).language.languageCode?.identifier
         }
 
+        #if DEBUG
         print("[SUBS] selectLegibleOption: jellyfinIndex=\(jellyfinIndex) targetTitle=\(targetTitle ?? "nil") targetLang=\(targetLang ?? "nil") rawLang=\(targetStream?.language ?? "nil")")
         print("[SUBS]   available AVPlayer options (\(group.options.count)):")
+        #endif
         for (i, opt) in group.options.enumerated() {
             let lang = opt.locale?.language.languageCode?.identifier ?? "nil"
+            #if DEBUG
             print("[SUBS]     [\(i)] displayName=\"\(opt.displayName)\" lang=\(lang) locale=\(opt.locale?.identifier ?? "nil")")
+            #endif
         }
 
         // Gather all AVPlayer options that match the target language
@@ -580,21 +598,29 @@ final class PlayerViewModel {
             }
         } ?? []
 
+        #if DEBUG
         print("[SUBS]   langMatches count=\(langMatches.count)")
+        #endif
 
         let option: AVMediaSelectionOption?
         if langMatches.count == 1 {
             option = langMatches.first
+            #if DEBUG
             print("[SUBS]   -> single lang match: \(option?.displayName ?? "nil")")
+            #endif
         } else if langMatches.count > 1 {
             option = langMatches.first { $0.displayName.localizedCaseInsensitiveContains(targetTitle ?? "") }
                 ?? {
                     let sameLanguageStreams = subtitleStreams.filter { $0.language == targetStream?.language }
                     let position = sameLanguageStreams.firstIndex(where: { $0.index == jellyfinIndex }) ?? 0
+                    #if DEBUG
                     print("[SUBS]   -> multi lang match, positional: position=\(position)")
+                    #endif
                     return position < langMatches.count ? langMatches[position] : langMatches.first
                 }()
+            #if DEBUG
             print("[SUBS]   -> multi lang match selected: \(option?.displayName ?? "nil")")
+            #endif
         } else {
             option = group.options.first { opt in
                 if let targetTitle {
@@ -602,14 +628,20 @@ final class PlayerViewModel {
                 }
                 return false
             } ?? group.options.first
+            #if DEBUG
             print("[SUBS]   -> no lang match, fallback selected: \(option?.displayName ?? "nil")")
+            #endif
         }
 
         if let option {
+            #if DEBUG
             print("[SUBS]   SELECTING option: \(option.displayName)")
+            #endif
             playerItem.select(option, in: group)
         } else {
+            #if DEBUG
             print("[SUBS]   NO option to select!")
+            #endif
         }
     }
 
@@ -726,7 +758,9 @@ final class PlayerViewModel {
     /// Used for burn-in subtitle selection and audio track fallback.
     /// Keeps the old player visible while loading the new stream to avoid a black flash.
     private func restartPlayback(audioStreamIndex: Int?, subtitleStreamIndex: Int?) async {
+        #if DEBUG
         print("[SUBS] restartPlayback: audioStreamIndex=\(String(describing: audioStreamIndex)) subtitleStreamIndex=\(String(describing: subtitleStreamIndex))")
+        #endif
         let savedTime = currentTime
         let wasPaused = !isPlaying
 
@@ -745,14 +779,18 @@ final class PlayerViewModel {
                 subtitleStreamIndex: subtitleStreamIndex
             )
 
+            #if DEBUG
             print("[SUBS] restartPlayback: got new stream info")
             print("[SUBS]   playMethod=\(info.playMethod) url=\(info.url.absoluteString)")
             print("[SUBS]   transcodingURL=\(info.mediaSource.transcodingURL ?? "nil")")
+            #endif
             let newSubStreams = PlaybackService.subtitleStreams(from: info.mediaSource)
+            #if DEBUG
             print("[SUBS]   subtitle streams in new mediaSource (\(newSubStreams.count)):")
             for s in newSubStreams {
                 print("[SUBS]     index=\(s.index ?? -1) lang=\(s.language ?? "nil") title=\(s.displayTitle ?? "nil") codec=\(s.codec ?? "nil") isExternal=\(s.isExternal ?? false)")
             }
+            #endif
 
             // Prepare the new player item and seek BEFORE swapping
             let restartAsset: AVURLAsset
@@ -860,10 +898,14 @@ final class PlayerViewModel {
 
             // Re-select non-burn-in subtitle if active
             if currentBurnInSubtitleIndex == nil, let subIndex = selectedSubtitleIndex {
+                #if DEBUG
                 print("[SUBS] restartPlayback: re-selecting legible option for subIndex=\(subIndex)")
+                #endif
                 await selectLegibleOption(for: subIndex, on: playerItem)
             } else {
+                #if DEBUG
                 print("[SUBS] restartPlayback: NOT re-selecting legible (burnIn=\(String(describing: currentBurnInSubtitleIndex)) selectedSub=\(String(describing: selectedSubtitleIndex)))")
+                #endif
             }
 
             // Report start

@@ -246,8 +246,10 @@ final class PlaybackService {
         }
 
         let result = basePath + "?" + items.joined(separator: "&")
+        #if DEBUG
         print("[SUBS] patchTranscodeQueryParams: sub=\(String(describing: subtitleStreamIndex)) audio=\(String(describing: audioStreamIndex))")
         print("[SUBS]   patched URL=\(result)")
+        #endif
         return result
     }
 }
