@@ -25,36 +25,25 @@ struct ContentView: View {
                 .navigationDestination(for: AppDestination.self) { destination in
                     switch destination {
                     case .movieDetail(let itemID):
-                        MovieDetailView(
-                            viewModel: MovieDetailViewModel(
-                                itemID: itemID,
-                                jellyfinService: jellyfinService
-                            ),
-                            imageService: jellyfinService.imageService,
+                        MovieDetailDestination(
+                            itemID: itemID,
+                            jellyfinService: jellyfinService,
                             navigationPath: $navigationPath
                         )
                     case .seriesDetail(let itemID):
-                        SeriesDetailView(
-                            viewModel: SeriesDetailViewModel(
-                                itemID: itemID,
-                                jellyfinService: jellyfinService
-                            ),
-                            imageService: jellyfinService.imageService,
+                        SeriesDetailDestination(
+                            itemID: itemID,
+                            jellyfinService: jellyfinService,
                             navigationPath: $navigationPath
                         )
                     case .player(let itemID):
-                        PlayerView(
-                            viewModel: PlayerViewModel(
-                                itemID: itemID,
-                                jellyfinService: jellyfinService
-                            )
+                        PlayerDestination(
+                            itemID: itemID,
+                            jellyfinService: jellyfinService
                         )
                     case .search:
-                        SearchView(
-                            viewModel: SearchViewModel(
-                                jellyfinService: jellyfinService
-                            ),
-                            imageService: jellyfinService.imageService,
+                        SearchDestination(
+                            jellyfinService: jellyfinService,
                             navigationPath: $navigationPath
                         )
                     }
@@ -66,33 +55,112 @@ struct ContentView: View {
     private var rootView: some View {
         if jellyfinService.isAuthenticated {
             HomeView(
-                viewModel: cachedModel(&homeViewModel) {
-                    HomeViewModel(jellyfinService: jellyfinService)
-                },
+                viewModel: homeViewModel ?? makeHomeViewModel(),
                 imageService: jellyfinService.imageService,
                 navigationPath: $navigationPath
             )
+            .onAppear { ensureHomeViewModel() }
         } else if jellyfinService.serverURL != nil {
             LoginView(
-                viewModel: cachedModel(&loginViewModel) {
-                    LoginViewModel(jellyfinService: jellyfinService)
-                },
+                viewModel: loginViewModel ?? makeLoginViewModel(),
                 imageService: jellyfinService.imageService
             )
+            .onAppear { ensureLoginViewModel() }
         } else {
             ServerConnectView(
-                viewModel: cachedModel(&serverConnectViewModel) {
-                    ServerConnectViewModel(jellyfinService: jellyfinService)
-                }
+                viewModel: serverConnectViewModel ?? makeServerConnectViewModel()
             )
+            .onAppear { ensureServerConnectViewModel() }
         }
     }
 
-    /// Return an existing cached model or create and cache a new one.
-    private func cachedModel<T>(_ storage: inout T?, create: () -> T) -> T {
-        if let existing = storage { return existing }
-        let model = create()
-        storage = model
-        return model
+    // Create models without mutating @State during body; onAppear caches them.
+    private func makeHomeViewModel() -> HomeViewModel {
+        HomeViewModel(jellyfinService: jellyfinService)
+    }
+    private func ensureHomeViewModel() {
+        if homeViewModel == nil { homeViewModel = HomeViewModel(jellyfinService: jellyfinService) }
+    }
+    private func makeLoginViewModel() -> LoginViewModel {
+        LoginViewModel(jellyfinService: jellyfinService)
+    }
+    private func ensureLoginViewModel() {
+        if loginViewModel == nil { loginViewModel = LoginViewModel(jellyfinService: jellyfinService) }
+    }
+    private func makeServerConnectViewModel() -> ServerConnectViewModel {
+        ServerConnectViewModel(jellyfinService: jellyfinService)
+    }
+    private func ensureServerConnectViewModel() {
+        if serverConnectViewModel == nil { serverConnectViewModel = ServerConnectViewModel(jellyfinService: jellyfinService) }
+    }
+}
+
+// MARK: - Destination Wrappers
+// Each wraps the real view and owns its ViewModel via @State so it
+// survives navigationDestination closure re-evaluations.
+
+struct MovieDetailDestination: View {
+    let itemID: String
+    let jellyfinService: JellyfinService
+    @Binding var navigationPath: NavigationPath
+    @State private var viewModel: MovieDetailViewModel?
+
+    var body: some View {
+        if let viewModel {
+            MovieDetailView(viewModel: viewModel, imageService: jellyfinService.imageService, navigationPath: $navigationPath)
+        } else {
+            ProgressView().onAppear {
+                viewModel = MovieDetailViewModel(itemID: itemID, jellyfinService: jellyfinService)
+            }
+        }
+    }
+}
+
+struct SeriesDetailDestination: View {
+    let itemID: String
+    let jellyfinService: JellyfinService
+    @Binding var navigationPath: NavigationPath
+    @State private var viewModel: SeriesDetailViewModel?
+
+    var body: some View {
+        if let viewModel {
+            SeriesDetailView(viewModel: viewModel, imageService: jellyfinService.imageService, navigationPath: $navigationPath)
+        } else {
+            ProgressView().onAppear {
+                viewModel = SeriesDetailViewModel(itemID: itemID, jellyfinService: jellyfinService)
+            }
+        }
+    }
+}
+
+struct PlayerDestination: View {
+    let itemID: String
+    let jellyfinService: JellyfinService
+    @State private var viewModel: PlayerViewModel?
+
+    var body: some View {
+        if let viewModel {
+            PlayerView(viewModel: viewModel)
+        } else {
+            ProgressView().onAppear {
+                viewModel = PlayerViewModel(itemID: itemID, jellyfinService: jellyfinService)
+            }
+        }
+    }
+}
+
+struct SearchDestination: View {
+    let jellyfinService: JellyfinService
+    @Binding var navigationPath: NavigationPath
+    @State private var viewModel: SearchViewModel?
+
+    var body: some View {
+        if let viewModel {
+            SearchView(viewModel: viewModel, imageService: jellyfinService.imageService, navigationPath: $navigationPath)
+        } else {
+            ProgressView().onAppear {
+                viewModel = SearchViewModel(jellyfinService: jellyfinService)
+            }
+        }
     }
 }
