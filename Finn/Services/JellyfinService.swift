@@ -1,6 +1,7 @@
 import Foundation
 import JellyfinAPI
 import Get
+import os.log
 
 @MainActor
 @Observable
@@ -103,7 +104,12 @@ final class JellyfinService {
 
     /// Sign out and clear saved credentials
     func signOut() async {
-        try? await client?.signOut()
+        do {
+            try await client?.signOut()
+        } catch {
+            Logger(subsystem: "dk.troendheim.finn", category: "auth")
+                .warning("Server sign-out failed (token may remain valid server-side): \(error.localizedDescription)")
+        }
         self.currentUserID = nil
         self.currentUserName = nil
         self.isAuthenticated = false
