@@ -531,7 +531,8 @@ final class PlayerViewModel {
             }
         } else {
             print("[SUBS]   -> PATH: direct play, deselect legible (subtitles off)")
-            Task {
+            playerActionTask?.cancel()
+            playerActionTask = Task {
                 await deselectLegibleOptions(on: currentItem)
             }
         }
