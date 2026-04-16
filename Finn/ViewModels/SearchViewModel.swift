@@ -40,6 +40,7 @@ final class SearchViewModel {
                     results = []
                 }
             }
+            guard !Task.isCancelled else { return }
             hasSearched = true
             isSearching = false
         }
