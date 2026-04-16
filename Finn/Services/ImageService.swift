@@ -82,7 +82,10 @@ final class ImageService: Sendable {
 
     private func imageURL(itemID: String, imageType: String, maxWidth: Int, quality: Int = 90) -> URL? {
         serverURL
-            .appendingPathComponent("Items/\(itemID)/Images/\(imageType)")
+            .appendingPathComponent("Items")
+            .appendingPathComponent(itemID)
+            .appendingPathComponent("Images")
+            .appendingPathComponent(imageType)
             .appending(queryItems: [
                 URLQueryItem(name: "maxWidth", value: String(maxWidth)),
                 URLQueryItem(name: "quality", value: String(quality))
