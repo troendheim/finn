@@ -54,17 +54,29 @@ struct ContentView: View {
     @ViewBuilder
     private var rootView: some View {
         if jellyfinService.isAuthenticated {
-            HomeView(
-                viewModel: homeViewModel ?? makeHomeViewModel(),
-                imageService: jellyfinService.imageService,
-                navigationPath: $navigationPath
-            )
+            Group {
+                if let homeViewModel {
+                    HomeView(
+                        viewModel: homeViewModel,
+                        imageService: jellyfinService.imageService,
+                        navigationPath: $navigationPath
+                    )
+                } else {
+                    ProgressView()
+                }
+            }
             .onAppear { ensureHomeViewModel() }
         } else if jellyfinService.serverURL != nil {
-            LoginView(
-                viewModel: loginViewModel ?? makeLoginViewModel(),
-                imageService: jellyfinService.imageService
-            )
+            Group {
+                if let loginViewModel {
+                    LoginView(
+                        viewModel: loginViewModel,
+                        imageService: jellyfinService.imageService
+                    )
+                } else {
+                    ProgressView()
+                }
+            }
             .onAppear { ensureLoginViewModel() }
         } else {
             ServerConnectView(
@@ -75,14 +87,8 @@ struct ContentView: View {
     }
 
     // Create models without mutating @State during body; onAppear caches them.
-    private func makeHomeViewModel() -> HomeViewModel {
-        HomeViewModel(jellyfinService: jellyfinService)
-    }
     private func ensureHomeViewModel() {
         if homeViewModel == nil { homeViewModel = HomeViewModel(jellyfinService: jellyfinService) }
-    }
-    private func makeLoginViewModel() -> LoginViewModel {
-        LoginViewModel(jellyfinService: jellyfinService)
     }
     private func ensureLoginViewModel() {
         if loginViewModel == nil { loginViewModel = LoginViewModel(jellyfinService: jellyfinService) }
