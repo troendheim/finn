@@ -49,6 +49,7 @@ struct LibraryGridView: View {
                     .padding(.top, 30)
                     .padding(.bottom, 40)
                 }
+                .focusSection()
             }
 
             if let error = viewModel.error {

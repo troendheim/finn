@@ -48,7 +48,7 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
         defer { isLoading = false }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            let (data, _) = try await ImageURLSession.shared.data(from: url)
             // Decode on a background thread so scrolling doesn't block the
             // main run loop — UIImage(data:) is surprisingly expensive.
             let downloaded = try await Task.detached(priority: .userInitiated) {
@@ -92,9 +92,11 @@ private final class ImageCacheStore: @unchecked Sendable {
     private let cache = NSCache<NSURL, PlatformImage>()
 
     private init() {
-        // Allow up to ~600 images in memory — a full library page plus
-        // the visible rows so scrolling back doesn't re-fetch.
-        cache.countLimit = 600
+        // Allow up to ~200 decoded images in memory (~50–80 MB) — plenty
+        // for visible rows plus a scrolling buffer.  Anything beyond is
+        // reloaded from the URLSession disk cache, which is much cheaper
+        // than a fresh network round-trip.
+        cache.countLimit = 200
     }
 
     func image(for url: URL) -> PlatformImage? {
@@ -104,4 +106,25 @@ private final class ImageCacheStore: @unchecked Sendable {
     func setImage(_ image: PlatformImage, for url: URL) {
         cache.setObject(image, forKey: url as NSURL)
     }
+}
+
+// MARK: - Dedicated image URLSession
+
+enum ImageURLSession {
+    /// A `URLSession` tuned for image downloads: more concurrent connections
+    /// per host than the shared session, and a generous on-disk cache so
+    /// scrolled-away images don't re-hit the network.
+    static let shared: URLSession = {
+        let cache = URLCache(
+            memoryCapacity: 20 * 1024 * 1024,   // 20 MB
+            diskCapacity: 256 * 1024 * 1024,    // 256 MB
+            diskPath: "finn-image-cache"
+        )
+        let config = URLSessionConfiguration.default
+        config.urlCache = cache
+        config.requestCachePolicy = .returnCacheDataElseLoad
+        config.httpMaximumConnectionsPerHost = 20
+        config.timeoutIntervalForRequest = 15
+        return URLSession(configuration: config)
+    }()
 }
