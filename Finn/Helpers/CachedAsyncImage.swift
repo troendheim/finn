@@ -49,7 +49,12 @@ struct CachedAsyncImage<Content: View, Placeholder: View>: View {
 
         do {
             let (data, _) = try await URLSession.shared.data(from: url)
-            guard let downloaded = PlatformImage(data: data) else { return }
+            // Decode on a background thread so scrolling doesn't block the
+            // main run loop — UIImage(data:) is surprisingly expensive.
+            let downloaded = try await Task.detached(priority: .userInitiated) {
+                PlatformImage(data: data)
+            }.value
+            guard let downloaded else { return }
             ImageCacheStore.shared.setImage(downloaded, for: url)
             // Only update if we're still showing the same URL
             if !Task.isCancelled {
@@ -87,8 +92,9 @@ private final class ImageCacheStore: @unchecked Sendable {
     private let cache = NSCache<NSURL, PlatformImage>()
 
     private init() {
-        // Allow up to ~200 images in memory
-        cache.countLimit = 200
+        // Allow up to ~600 images in memory — a full library page plus
+        // the visible rows so scrolling back doesn't re-fetch.
+        cache.countLimit = 600
     }
 
     func image(for url: URL) -> PlatformImage? {

@@ -9,7 +9,15 @@ import JellyfinAPI
 final class LibraryViewModel {
     // MARK: - State
 
-    var items: [BaseItemDto] = []
+    var items: [BaseItemDto] = [] {
+        didSet { displayItems = items.filter { $0.id != nil } }
+    }
+
+    /// Items guaranteed to have an `id`, suitable for `ForEach(id: \.id)`.
+    /// Pre-filtered once on assignment so the grid body doesn't allocate a
+    /// filtered copy on every view update.
+    private(set) var displayItems: [BaseItemDto] = []
+
     var isLoading = false
     private(set) var hasLoaded = false
     var error: String?

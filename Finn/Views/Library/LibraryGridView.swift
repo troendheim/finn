@@ -36,7 +36,7 @@ struct LibraryGridView: View {
             } else {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 40) {
-                        ForEach(viewModel.items.filter { $0.id != nil }, id: \.id) { item in
+                        ForEach(viewModel.displayItems, id: \.id) { item in
                             Button {
                                 navigateToDetail(item, navigationPath: $navigationPath)
                             } label: {
