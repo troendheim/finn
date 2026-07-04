@@ -1,22 +1,47 @@
 import SwiftUI
 import JellyfinAPI
 
+enum HomeTab: String, CaseIterable, Hashable {
+    case home
+    case series
+    case movies
+
+    var label: String {
+        switch self {
+        case .home: "Home"
+        case .series: "Series"
+        case .movies: "Movies"
+        }
+    }
+}
+
 struct HomeView: View {
     @Bindable var viewModel: HomeViewModel
     let imageService: ImageService?
     @Binding var navigationPath: NavigationPath
     @State private var showSettings = false
     @State private var hasAppeared = false
+    @State private var selectedTab: HomeTab = .home
+    @State private var seriesLibraryViewModel: LibraryViewModel?
+    @State private var moviesLibraryViewModel: LibraryViewModel?
     @Namespace private var contentNamespace
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             LazyVStack(alignment: .leading, spacing: 40) {
-                // Header with search and settings buttons
-                HStack {
+                // Header with tabs and search/settings buttons
+                HStack(spacing: 24) {
                     Text("Finn")
                         .font(.title)
                         .fontWeight(.bold)
+
+                    Picker("Section", selection: $selectedTab) {
+                        ForEach(HomeTab.allCases, id: \.self) { tab in
+                            Text(tab.label).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(maxWidth: 360)
 
                     Spacer()
 
@@ -45,68 +70,28 @@ struct HomeView: View {
                 .padding(.top, 20)
                 .focusSection()
 
-                if !viewModel.hasLoaded && viewModel.continueWatching.isEmpty {
-                    ProgressView()
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 100)
-                } else {
-                    // Continue Watching
-                    ContentRow(
-                        title: "Continue Watching",
-                        items: viewModel.continueWatching,
-                        onSelect: { navigateToDetail($0) }
-                    ) { item in
-                        LandscapeCard(item: item, imageService: imageService)
+                switch selectedTab {
+                case .home:
+                    homeContent
+                case .series:
+                    if let vm = ensureLibraryViewModel(.series) {
+                        LibraryGridView(
+                            viewModel: vm,
+                            imageService: imageService,
+                            navigationPath: $navigationPath
+                        )
                     }
-                    .prefersDefaultFocus(in: contentNamespace)
-
-                    // Next Up
-                    ContentRow(
-                        title: "Next Up",
-                        items: viewModel.nextUp,
-                        onSelect: { navigateToDetail($0) }
-                    ) { item in
-                        LandscapeCard(item: item, imageService: imageService)
-                    }
-
-                    // Recently Added
-                    ContentRow(
-                        title: "Recently Added",
-                        items: viewModel.latestMedia,
-                        onSelect: { navigateToDetail($0) }
-                    ) { item in
-                        PosterCard(item: item, imageService: imageService)
-                    }
-
-                    // Genre rows
-                    ForEach(viewModel.genreRows, id: \.genre.id) { row in
-                        ContentRow(
-                            title: row.genre.name ?? "Genre",
-                            items: row.items,
-                            onSelect: { navigateToDetail($0) }
-                        ) { item in
-                            PosterCard(item: item, imageService: imageService)
-                        }
-                    }
-
-                    // Empty state
-                    if viewModel.isLibraryEmpty {
-                        VStack(spacing: 16) {
-                            Image(systemName: "tv")
-                                .font(.system(size: 60))
-                                .foregroundStyle(.secondary)
-                            Text("Your library is empty")
-                                .font(.title3)
-                            Text("Add some media to your Jellyfin server to get started")
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.top, 80)
+                case .movies:
+                    if let vm = ensureLibraryViewModel(.movies) {
+                        LibraryGridView(
+                            viewModel: vm,
+                            imageService: imageService,
+                            navigationPath: $navigationPath
+                        )
                     }
                 }
 
-                if let error = viewModel.error {
+                if selectedTab == .home, let error = viewModel.error {
                     VStack(spacing: 12) {
                         Text(error)
                             .foregroundStyle(.red)
@@ -136,6 +121,96 @@ struct HomeView: View {
         .focusScope(contentNamespace)
         .sheet(isPresented: $showSettings) {
             settingsOverlay
+        }
+    }
+
+    // MARK: - Home Tab Content
+
+    @ViewBuilder
+    private var homeContent: some View {
+        if !viewModel.hasLoaded && viewModel.continueWatching.isEmpty {
+            ProgressView()
+                .frame(maxWidth: .infinity)
+                .padding(.top, 100)
+        } else {
+            // Continue Watching
+            ContentRow(
+                title: "Continue Watching",
+                items: viewModel.continueWatching,
+                onSelect: { navigateToDetail($0, navigationPath: $navigationPath) }
+            ) { item in
+                LandscapeCard(item: item, imageService: imageService)
+            }
+            .prefersDefaultFocus(in: contentNamespace)
+
+            // Next Up
+            ContentRow(
+                title: "Next Up",
+                items: viewModel.nextUp,
+                onSelect: { navigateToDetail($0, navigationPath: $navigationPath) }
+            ) { item in
+                LandscapeCard(item: item, imageService: imageService)
+            }
+
+            // Recently Added
+            ContentRow(
+                title: "Recently Added",
+                items: viewModel.latestMedia,
+                onSelect: { navigateToDetail($0, navigationPath: $navigationPath) }
+            ) { item in
+                PosterCard(item: item, imageService: imageService)
+            }
+
+            // Genre rows
+            ForEach(viewModel.genreRows, id: \.genre.id) { row in
+                ContentRow(
+                    title: row.genre.name ?? "Genre",
+                    items: row.items,
+                    onSelect: { navigateToDetail($0, navigationPath: $navigationPath) }
+                ) { item in
+                    PosterCard(item: item, imageService: imageService)
+                }
+            }
+
+            // Empty state
+            if viewModel.isLibraryEmpty {
+                VStack(spacing: 16) {
+                    Image(systemName: "tv")
+                        .font(.system(size: 60))
+                        .foregroundStyle(.secondary)
+                    Text("Your library is empty")
+                        .font(.title3)
+                    Text("Add some media to your Jellyfin server to get started")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 80)
+            }
+        }
+    }
+
+    /// Lazily creates (and caches) the `LibraryViewModel` for the given tab.
+    private func ensureLibraryViewModel(_ tab: HomeTab) -> LibraryViewModel? {
+        switch tab {
+        case .series:
+            if seriesLibraryViewModel == nil {
+                seriesLibraryViewModel = LibraryViewModel(
+                    jellyfinService: viewModel.jellyfinService,
+                    includeItemTypes: [.series]
+                )
+            }
+            return seriesLibraryViewModel
+        case .movies:
+            if moviesLibraryViewModel == nil {
+                moviesLibraryViewModel = LibraryViewModel(
+                    jellyfinService: viewModel.jellyfinService,
+                    includeItemTypes: [.movie]
+                )
+            }
+            return moviesLibraryViewModel
+        case .home:
+            return nil
         }
     }
 
@@ -191,20 +266,5 @@ struct HomeView: View {
             .glassButtonStyle()
         }
         .padding(40)
-    }
-
-    private func navigateToDetail(_ item: BaseItemDto) {
-        guard let id = item.id else { return }
-        switch item.type {
-        case .movie:
-            navigationPath.append(AppDestination.movieDetail(itemID: id))
-        case .series:
-            navigationPath.append(AppDestination.seriesDetail(itemID: id))
-        case .episode:
-            // Episodes in Continue Watching / Next Up go straight to the player
-            navigationPath.append(AppDestination.player(itemID: id))
-        default:
-            break
-        }
     }
 }

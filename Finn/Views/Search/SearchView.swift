@@ -43,7 +43,7 @@ struct SearchView: View {
                 LazyVGrid(columns: columns, spacing: 40) {
                     ForEach(viewModel.results.filter { $0.id != nil }, id: \.id) { item in
                         Button {
-                            navigateToDetail(item)
+                            navigateToDetail(item, navigationPath: $navigationPath)
                         } label: {
                             PosterCard(item: item, imageService: imageService)
                         }
@@ -53,20 +53,6 @@ struct SearchView: View {
                 .padding(.horizontal, 60)
                 .padding(.vertical, 30)
             }
-        }
-    }
-
-    private func navigateToDetail(_ item: BaseItemDto) {
-        guard let id = item.id else { return }
-        switch item.type {
-        case .movie:
-            navigationPath.append(AppDestination.movieDetail(itemID: id))
-        case .series:
-            navigationPath.append(AppDestination.seriesDetail(itemID: id))
-        case .episode:
-            navigationPath.append(AppDestination.player(itemID: id))
-        default:
-            break
         }
     }
 }

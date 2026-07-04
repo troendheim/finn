@@ -228,6 +228,35 @@ final class JellyfinService {
         return result.items ?? []
     }
 
+    /// Complete library listing for one or more item types (movies and/or series).
+    /// Paginated via `limit`/`startIndex`; pass `nil` for `limit` to request a large
+    /// batch in a single call. Used by the Series and Movies overview tabs.
+    func getLibraryItems(
+        includeItemTypes: [BaseItemKind],
+        sortBy: [ItemSortBy] = [.dateCreated],
+        sortOrder: [JellyfinAPI.SortOrder] = [.descending],
+        limit: Int? = 500,
+        startIndex: Int? = nil
+    ) async throws -> [BaseItemDto] {
+        guard let client, currentUserID != nil else { throw FinnError.notConnected }
+        let params = Paths.GetItemsParameters(
+            userID: currentUserID,
+            startIndex: startIndex,
+            limit: limit,
+            isRecursive: true,
+            sortOrder: sortOrder,
+            fields: [.overview],
+            includeItemTypes: includeItemTypes,
+            sortBy: sortBy,
+            enableUserData: true,
+            imageTypeLimit: 1,
+            enableImageTypes: [.primary, .backdrop],
+            enableImages: true
+        )
+        let result = try await client.send(Paths.getItems(parameters: params)).value
+        return result.items ?? []
+    }
+
     /// Single item detail
     func getItem(id: String) async throws -> BaseItemDto {
         guard let client, currentUserID != nil else { throw FinnError.notConnected }
