@@ -74,20 +74,28 @@ struct HomeView: View {
                 case .home:
                     homeContent
                 case .series:
-                    if let vm = ensureLibraryViewModel(.series) {
+                    if let vm = seriesLibraryViewModel {
                         LibraryGridView(
                             viewModel: vm,
                             imageService: imageService,
                             navigationPath: $navigationPath
                         )
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 100)
                     }
                 case .movies:
-                    if let vm = ensureLibraryViewModel(.movies) {
+                    if let vm = moviesLibraryViewModel {
                         LibraryGridView(
                             viewModel: vm,
                             imageService: imageService,
                             navigationPath: $navigationPath
                         )
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.top, 100)
                     }
                 }
 
@@ -119,6 +127,24 @@ struct HomeView: View {
             await viewModel.forceRefresh()
         }
         .focusScope(contentNamespace)
+        .task(id: selectedTab) {
+            // Create the library view model for the selected tab outside of
+            // body evaluation so we never mutate @State during a view update.
+            switch selectedTab {
+            case .series where seriesLibraryViewModel == nil:
+                seriesLibraryViewModel = LibraryViewModel(
+                    jellyfinService: viewModel.jellyfinService,
+                    includeItemTypes: [.series]
+                )
+            case .movies where moviesLibraryViewModel == nil:
+                moviesLibraryViewModel = LibraryViewModel(
+                    jellyfinService: viewModel.jellyfinService,
+                    includeItemTypes: [.movie]
+                )
+            default:
+                break
+            }
+        }
         .sheet(isPresented: $showSettings) {
             settingsOverlay
         }
@@ -187,30 +213,6 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, 80)
             }
-        }
-    }
-
-    /// Lazily creates (and caches) the `LibraryViewModel` for the given tab.
-    private func ensureLibraryViewModel(_ tab: HomeTab) -> LibraryViewModel? {
-        switch tab {
-        case .series:
-            if seriesLibraryViewModel == nil {
-                seriesLibraryViewModel = LibraryViewModel(
-                    jellyfinService: viewModel.jellyfinService,
-                    includeItemTypes: [.series]
-                )
-            }
-            return seriesLibraryViewModel
-        case .movies:
-            if moviesLibraryViewModel == nil {
-                moviesLibraryViewModel = LibraryViewModel(
-                    jellyfinService: viewModel.jellyfinService,
-                    includeItemTypes: [.movie]
-                )
-            }
-            return moviesLibraryViewModel
-        case .home:
-            return nil
         }
     }
 
