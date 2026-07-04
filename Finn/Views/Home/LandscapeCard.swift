@@ -22,7 +22,7 @@ struct LandscapeCard: View {
                 Rectangle().fill(.gray.opacity(0.2))
             }
 
-            // Text overlay — full-width Liquid Glass bar at bottom
+            // Text overlay — bottom scrim gradient
             VStack(spacing: 0) {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -48,7 +48,7 @@ struct LandscapeCard: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
 
-                // Progress bar inside the glass bar so it renders on top
+                // Progress bar inside the scrim so it renders on top
                 if item.playbackProgress > 0 {
                     Rectangle()
                         .fill(.red)
@@ -57,7 +57,14 @@ struct LandscapeCard: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            .liquidGlass(in: 0)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [.black.opacity(0.0), .black.opacity(0.65)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: 12))

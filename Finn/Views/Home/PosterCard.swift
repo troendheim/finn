@@ -22,7 +22,7 @@ struct PosterCard: View {
                 Rectangle().fill(.gray.opacity(0.2))
             }
 
-            // Text overlay — full-width Liquid Glass bar at bottom
+            // Text overlay — bottom scrim gradient
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     if item.type == .series {
@@ -41,7 +41,14 @@ struct PosterCard: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
-            .liquidGlass(in: 0)
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    colors: [.black.opacity(0.0), .black.opacity(0.65)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
         }
         .frame(width: cardWidth, height: cardHeight)
         .clipShape(RoundedRectangle(cornerRadius: 10))
