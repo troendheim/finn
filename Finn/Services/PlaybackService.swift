@@ -167,6 +167,7 @@ final class PlaybackService {
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
+                URLQueryItem(name: "api_key", value: jellyfinService.client?.accessToken),
             ]
             if let url = components.url {
                 return (url, .directPlay)
@@ -183,6 +184,7 @@ final class PlaybackService {
             components.queryItems = [
                 URLQueryItem(name: "static", value: "true"),
                 URLQueryItem(name: "mediaSourceId", value: mediaSource.id),
+                URLQueryItem(name: "api_key", value: jellyfinService.client?.accessToken),
             ]
             if let url = components.url {
                 return (url, .directStream)
