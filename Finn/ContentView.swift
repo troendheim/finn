@@ -36,6 +36,12 @@ struct ContentView: View {
                             jellyfinService: jellyfinService,
                             navigationPath: $navigationPath
                         )
+                    case .collection(let itemID):
+                        CollectionDetailDestination(
+                            itemID: itemID,
+                            jellyfinService: jellyfinService,
+                            navigationPath: $navigationPath
+                        )
                     case .player(let itemID):
                         PlayerDestination(
                             itemID: itemID,
@@ -166,6 +172,23 @@ struct SearchDestination: View {
         } else {
             ProgressView().onAppear {
                 viewModel = SearchViewModel(jellyfinService: jellyfinService)
+            }
+        }
+    }
+}
+
+struct CollectionDetailDestination: View {
+    let itemID: String
+    let jellyfinService: JellyfinService
+    @Binding var navigationPath: NavigationPath
+    @State private var viewModel: CollectionDetailViewModel?
+
+    var body: some View {
+        if let viewModel {
+            CollectionDetailView(viewModel: viewModel, imageService: jellyfinService.imageService, navigationPath: $navigationPath)
+        } else {
+            ProgressView().onAppear {
+                viewModel = CollectionDetailViewModel(itemID: itemID, jellyfinService: jellyfinService)
             }
         }
     }

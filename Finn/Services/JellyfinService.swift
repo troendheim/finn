@@ -231,20 +231,24 @@ final class JellyfinService {
     /// Complete library listing for one or more item types (movies and/or series).
     /// Paginated via `limit`/`startIndex`; pass `nil` for `limit` to request a large
     /// batch in a single call. Used by the Series and Movies overview tabs.
+    /// Set `parentID` to fetch children of a collection, season, etc.
     func getLibraryItems(
-        includeItemTypes: [BaseItemKind],
+        parentID: String? = nil,
+        includeItemTypes: [BaseItemKind]? = nil,
         sortBy: [ItemSortBy] = [.dateCreated],
         sortOrder: [JellyfinAPI.SortOrder] = [.descending],
         limit: Int? = 500,
-        startIndex: Int? = nil
+        startIndex: Int? = nil,
+        isRecursive: Bool = true
     ) async throws -> [BaseItemDto] {
         guard let client, currentUserID != nil else { throw FinnError.notConnected }
         let params = Paths.GetItemsParameters(
             userID: currentUserID,
             startIndex: startIndex,
             limit: limit,
-            isRecursive: true,
+            isRecursive: isRecursive,
             sortOrder: sortOrder,
+            parentID: parentID,
             fields: [.overview],
             includeItemTypes: includeItemTypes,
             sortBy: sortBy,
