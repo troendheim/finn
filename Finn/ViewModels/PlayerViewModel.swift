@@ -1114,7 +1114,7 @@ final class PlayerViewModel {
     private func checkNearEnd() {
         guard duration > 0, nextEpisode != nil, !showNextEpisodeOverlay else { return }
         let remaining = duration - currentTime
-        if remaining <= 10 && remaining > 0 {
+        if remaining <= 30 && remaining > 0 {
             showNextEpisodeOverlay = true
             startNextEpisodeCountdown()
         }
@@ -1135,7 +1135,7 @@ final class PlayerViewModel {
     }
 
     private func startNextEpisodeCountdown() {
-        nextEpisodeCountdown = max(0, Int(duration - currentTime))
+        nextEpisodeCountdown = 30
         countdownTask = Task {
             while nextEpisodeCountdown > 0 && !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(1))

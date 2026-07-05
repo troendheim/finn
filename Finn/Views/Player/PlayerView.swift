@@ -54,6 +54,11 @@ struct PlayerView: View {
     @Bindable var viewModel: PlayerViewModel
     @Environment(\.dismiss) private var dismiss
 
+    private enum OverlayFocus: Hashable {
+        case playNow, cancel
+    }
+    @FocusState private var focusedOverlayButton: OverlayFocus?
+
     var body: some View {
         ZStack {
             // Player content layer — handles remote move/exit commands
@@ -271,6 +276,7 @@ struct PlayerView: View {
             // Next episode overlay
             if viewModel.showNextEpisodeOverlay, let next = viewModel.nextEpisode {
                 nextEpisodeOverlay(next)
+                    .onAppear { focusedOverlayButton = .playNow }
             }
 
             // Playback complete overlay
@@ -377,11 +383,13 @@ struct PlayerView: View {
                             viewModel.playNextEpisode()
                         }
                         .glassButtonStyle(prominent: true)
+                        .focused($focusedOverlayButton, equals: .playNow)
 
                         Button("Cancel") {
                             viewModel.cancelNextEpisode()
                         }
                         .glassButtonStyle()
+                        .focused($focusedOverlayButton, equals: .cancel)
                     }
                 }
                 .padding(30)
