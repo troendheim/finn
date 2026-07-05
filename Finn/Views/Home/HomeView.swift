@@ -27,91 +27,62 @@ struct HomeView: View {
     @Namespace private var contentNamespace
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            LazyVStack(alignment: .leading, spacing: 40) {
-                // Header with tabs and search/settings buttons
-                HStack(spacing: 24) {
-                    Text("Finn")
-                        .font(.title)
-                        .fontWeight(.bold)
+        VStack(spacing: 0) {
+            headerTabBar
 
-                    Picker("Section", selection: $selectedTab) {
-                        ForEach(HomeTab.allCases, id: \.self) { tab in
-                            Text(tab.label).tag(tab)
+            // Library tabs bring their own vertical ScrollView so we
+            // must not wrap them in another one. Nested same-direction
+            // ScrollViews cause the tvOS focus engine to fight over
+            // which container should scroll, producing severe stutter.
+            switch selectedTab {
+            case .home:
+                ScrollView(.vertical, showsIndicators: false) {
+                    LazyVStack(alignment: .leading, spacing: 40) {
+                        homeContent
+
+                        if let error = viewModel.error {
+                            VStack(spacing: 12) {
+                                Text(error)
+                                    .foregroundStyle(.red)
+                                Button("Retry") {
+                                    Task { await viewModel.loadAll() }
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
                         }
                     }
-                    .pickerStyle(.segmented)
-                    .frame(maxWidth: 360)
-
-                    Spacer()
-
-                    HStack(spacing: 16) {
-                        Button {
-                            showSettings = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                                .font(.title2)
-                        }
-                        .glassButtonStyle()
-                        .accessibilityLabel("Settings")
-
-                        Button {
-                            navigationPath.append(AppDestination.search)
-                        } label: {
-                            Image(systemName: "magnifyingglass")
-                                .font(.title2)
-                        }
-                        .glassButtonStyle()
-                        .accessibilityLabel("Search")
-                    }
-                    .liquidGlassContainer(spacing: 16)
+                    .padding(.bottom, 40)
                 }
-                .padding(.horizontal, 60)
-                .padding(.top, 20)
-                .focusSection()
+                .focusScope(contentNamespace)
+                .refreshable { await viewModel.forceRefresh() }
 
-                switch selectedTab {
-                case .home:
-                    homeContent
-                case .series:
-                    if let vm = seriesLibraryViewModel {
-                        LibraryGridView(
-                            viewModel: vm,
-                            imageService: imageService,
-                            navigationPath: $navigationPath
-                        )
-                    } else {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 100)
-                    }
-                case .movies:
-                    if let vm = moviesLibraryViewModel {
-                        LibraryGridView(
-                            viewModel: vm,
-                            imageService: imageService,
-                            navigationPath: $navigationPath
-                        )
-                    } else {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 100)
-                    }
+            case .series:
+                if let vm = seriesLibraryViewModel {
+                    LibraryGridView(
+                        viewModel: vm,
+                        imageService: imageService,
+                        navigationPath: $navigationPath
+                    )
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 100)
                 }
 
-                if selectedTab == .home, let error = viewModel.error {
-                    VStack(spacing: 12) {
-                        Text(error)
-                            .foregroundStyle(.red)
-                        Button("Retry") {
-                            Task { await viewModel.loadAll() }
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
+            case .movies:
+                if let vm = moviesLibraryViewModel {
+                    LibraryGridView(
+                        viewModel: vm,
+                        imageService: imageService,
+                        navigationPath: $navigationPath
+                    )
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 100)
                 }
             }
-            .padding(.bottom, 40)
         }
         .task {
             await viewModel.loadAll()
@@ -123,10 +94,6 @@ struct HomeView: View {
                 Task { await viewModel.refresh() }
             }
         }
-        .refreshable {
-            await viewModel.forceRefresh()
-        }
-        .focusScope(contentNamespace)
         .task(id: selectedTab) {
             // Create the library view model for the selected tab outside of
             // body evaluation so we never mutate @State during a view update.
@@ -148,6 +115,50 @@ struct HomeView: View {
         .sheet(isPresented: $showSettings) {
             settingsOverlay
         }
+    }
+
+    // MARK: - Header
+
+    private var headerTabBar: some View {
+        HStack(spacing: 24) {
+            Text("Finn")
+                .font(.title)
+                .fontWeight(.bold)
+
+            Picker("Section", selection: $selectedTab) {
+                ForEach(HomeTab.allCases, id: \.self) { tab in
+                    Text(tab.label).tag(tab)
+                }
+            }
+            .pickerStyle(.segmented)
+            .frame(maxWidth: 360)
+
+            Spacer()
+
+            HStack(spacing: 16) {
+                Button {
+                    showSettings = true
+                } label: {
+                    Image(systemName: "gearshape")
+                        .font(.title2)
+                }
+                .glassButtonStyle()
+                .accessibilityLabel("Settings")
+
+                Button {
+                    navigationPath.append(AppDestination.search)
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.title2)
+                }
+                .glassButtonStyle()
+                .accessibilityLabel("Search")
+            }
+            .liquidGlassContainer(spacing: 16)
+        }
+        .padding(.horizontal, 60)
+        .padding(.top, 20)
+        .focusSection()
     }
 
     // MARK: - Home Tab Content
