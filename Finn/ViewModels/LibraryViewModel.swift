@@ -67,6 +67,7 @@ final class LibraryViewModel {
 
     /// Re-fetch the listing, ignoring any in-flight load.
     func refresh() async {
+        hasLoaded = false
         isLoading = false
         await load()
     }
