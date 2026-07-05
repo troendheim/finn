@@ -500,6 +500,17 @@ final class JellyfinService {
         }
     }
 
+    // MARK: - Media Segments
+
+    func getMediaSegments(itemID: String) async throws -> [MediaSegmentDto] {
+        guard let client else { throw FinnError.notConnected }
+        let request = Paths.getItemSegments(itemID: itemID, includeSegmentTypes: [.intro, .outro])
+        let response = try await client.send(request)
+        return response.value.items ?? []
+    }
+
+    // MARK: - Private
+
     private func deviceID() -> String {
         let key = "finn.deviceID"
         if let existing = UserDefaults.standard.string(forKey: key) {

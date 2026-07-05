@@ -108,6 +108,7 @@ struct PlayerView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: viewModel.isPickerVisible)
         .animation(.easeInOut(duration: 0.3), value: viewModel.isControlsVisible)
+        .animation(.easeInOut(duration: 0.3), value: viewModel.activeSkipSegment)
         .task {
             await viewModel.onAppear()
         }
@@ -243,6 +244,34 @@ struct PlayerView: View {
                 // Loading / buffering indicator (only when no error)
                 ProgressView()
                     .scaleEffect(2)
+            }
+
+            // Skip Intro/Credits button
+            if viewModel.activeSkipSegment != nil {
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button {
+                            viewModel.skipSegment()
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "forward.end.fill")
+                                    .font(.body)
+                                Text(viewModel.activeSkipSegment == .intro ? "Skip Intro" : "Skip Credits")
+                                    .font(.body)
+                                    .fontWeight(.semibold)
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .glassButtonStyle()
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.trailing, 60)
+                    .padding(.bottom, 160)
+                }
+                .transition(.move(edge: .trailing).combined(with: .opacity))
             }
 
             // Controls overlay

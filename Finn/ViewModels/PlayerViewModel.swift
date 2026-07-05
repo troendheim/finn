@@ -36,6 +36,13 @@ final class PlayerViewModel {
     // Playback completion
     var isPlaybackComplete = false
 
+    // Skip intro/outro segments
+    var introSegment: MediaSegmentDto?
+    var outroSegment: MediaSegmentDto?
+    var activeSkipSegment: MediaSegmentType?
+    var hasSkippedIntro = false
+    var hasSkippedOutro = false
+
     // Burn-in subtitle state (requires transcode restart)
     var currentBurnInSubtitleIndex: Int?
 
@@ -102,6 +109,12 @@ final class PlayerViewModel {
             // Load item detail for title and next episode info
             item = try await jellyfinService.getItem(id: itemID)
             updateTitle()
+
+            // Fetch intro/outro segments
+            if let segments = try? await jellyfinService.getMediaSegments(itemID: itemID) {
+                introSegment = segments.first { $0.type == .intro }
+                outroSegment = segments.first { $0.type == .outro }
+            }
 
             // Load next episode if this is a series episode
             if item?.type == .episode, let seriesID = item?.seriesID, let seasonID = item?.seasonID {
@@ -462,6 +475,28 @@ final class PlayerViewModel {
         }
     }
 
+    func skipSegment() {
+        guard let segment = activeSkipSegment else { return }
+        let endTicks: Int? = segment == .intro ? introSegment?.endTicks : outroSegment?.endTicks
+        guard let ticks = endTicks else { return }
+        let targetSeconds = Double(ticks) / 10_000_000
+
+        if segment == .intro {
+            hasSkippedIntro = true
+        } else {
+            hasSkippedOutro = true
+        }
+        activeSkipSegment = nil
+
+        Task { @MainActor in
+            await player?.seek(to: CMTime(seconds: targetSeconds, preferredTimescale: 600))
+            currentTime = targetSeconds
+            showControlsIfHidden()
+            resetControlsTimer()
+            reportCurrentProgress(isPaused: false)
+        }
+    }
+
     // MARK: - Audio/Subtitle Selection
 
     func selectAudio(index: Int) {
@@ -749,6 +784,11 @@ final class PlayerViewModel {
         nextEpisodeCountdown = 10
         nextEpisode = nil
         isPlaybackComplete = false
+        introSegment = nil
+        outroSegment = nil
+        activeSkipSegment = nil
+        hasSkippedIntro = false
+        hasSkippedOutro = false
 
         // Preserve user's manual audio/subtitle choices across episode reloads
         // so onAppear's applyPreferred*Language() doesn't override them.
@@ -956,10 +996,40 @@ final class PlayerViewModel {
             guard let self else { return }
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.currentTime = time.seconds
+                let currentSeconds = time.seconds
+                self.currentTime = currentSeconds
                 if let dur = self.player?.currentItem?.duration, dur.isNumeric {
                     self.duration = dur.seconds
                 }
+
+                // Check intro/outro segments
+                if let intro = self.introSegment,
+                   let start = intro.startTicks.map({ Double($0) / 10_000_000 }),
+                   let end = intro.endTicks.map({ Double($0) / 10_000_000 }),
+                   !self.hasSkippedIntro,
+                   currentSeconds >= start, currentSeconds < end {
+                    self.activeSkipSegment = .intro
+                } else if let outro = self.outroSegment,
+                          let start = outro.startTicks.map({ Double($0) / 10_000_000 }),
+                          let end = outro.endTicks.map({ Double($0) / 10_000_000 }),
+                          !self.hasSkippedOutro,
+                          currentSeconds >= start, currentSeconds < end {
+                    self.activeSkipSegment = .outro
+                } else if self.activeSkipSegment != nil {
+                    let shouldClear: Bool = {
+                        if self.activeSkipSegment == .intro, let end = self.introSegment?.endTicks {
+                            return currentSeconds >= Double(end) / 10_000_000
+                        }
+                        if self.activeSkipSegment == .outro, let end = self.outroSegment?.endTicks {
+                            return currentSeconds >= Double(end) / 10_000_000
+                        }
+                        return false
+                    }()
+                    if shouldClear {
+                        self.activeSkipSegment = nil
+                    }
+                }
+
                 // Check for near-end (next episode countdown)
                 self.checkNearEnd()
             }
