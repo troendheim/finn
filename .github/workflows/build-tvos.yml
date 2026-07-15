@@ -1,0 +1,116 @@
+name: Build Finn for tvOS
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'Sources/**'
+      - 'Finn/**'
+      - 'Package.swift'
+      - 'Package.resolved'
+      - '.github/workflows/build-tvos.yml'
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Find tvOS SDK
+        id: sdk
+        run: |
+          SDK_PATH=$(xcrun --sdk appletvos --show-sdk-path 2>/dev/null)
+          echo "sdk_path=$SDK_PATH" >> $GITHUB_OUTPUT
+          echo "tvOS SDK: $SDK_PATH"
+          swift --version
+
+      - name: Cache SPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build
+          key: spm-tvos-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          restore-keys: spm-tvos-${{ runner.os }}-
+
+      - name: Build for tvOS
+        env:
+          SDK_PATH: ${{ steps.sdk.outputs.sdk_path }}
+        run: |
+          swift build \
+            -c release \
+            --triple arm64-apple-tvos \
+            -Xswiftc -sdk -Xswiftc "$SDK_PATH" \
+            -Xcc -isysroot -Xcc "$SDK_PATH"
+
+      - name: Package .app bundle
+        env:
+          SDK_PATH: ${{ steps.sdk.outputs.sdk_path }}
+        run: |
+          BUILD_BIN=.build/arm64-apple-tvos/release/Finn
+          APP_NAME=Finn
+          APP_DIR=build/${APP_NAME}.app
+
+          mkdir -p "$APP_DIR"
+          cp "$BUILD_BIN" "$APP_DIR/$APP_NAME"
+
+          SDK_VERSION=$(plutil -extract DefaultProperties.REQUIRED_PLATFORM_NAME xml1 \
+            "$SDK_PATH/SDKSettings.plist" -o - 2>/dev/null | grep string | sed 's/<[^>]*>//g' | xargs || echo "17.0")
+
+          cat > "$APP_DIR/Info.plist" << PLISTEOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleDevelopmentRegion</key>
+              <string>en</string>
+              <key>CFBundleDisplayName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundleExecutable</key>
+              <string>$APP_NAME</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.finn-holger.app</string>
+              <key>CFBundleInfoDictionaryVersion</key>
+              <string>6.0</string>
+              <key>CFBundleName</key>
+              <string>$APP_NAME</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0.0</string>
+              <key>CFBundleVersion</key>
+              <string>1</string>
+              <key>LSRequiresIPhoneOS</key>
+              <true/>
+              <key>UIRequiredDeviceCapabilities</key>
+              <array>
+                  <string>arm64</string>
+              </array>
+              <key>UILaunchScreen</key>
+              <dict/>
+              <key>DTPlatformName</key>
+              <string>appletvos</string>
+              <key>MinimumOSVersion</key>
+              <string>17.0</string>
+              <key>UIDeviceFamily</key>
+              <array>
+                  <integer>3</integer>
+              </array>
+          </dict>
+          </plist>
+          PLISTEOF
+
+          # Merge project Info.plist if exists
+          if [ -f Finn/Info.plist ]; then
+            echo "Note: Project has Info.plist, merging recommended"
+          fi
+
+          tar -czf finn-appletvos.tar.gz -C build .
+          echo "App size: $(du -sh finn-appletvos.tar.gz | cut -f1)"
+
+      - name: Upload .app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: finn-appletvos
+          path: finn-appletvos.tar.gz
+          retention-days: 7
