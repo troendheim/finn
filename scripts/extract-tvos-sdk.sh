@@ -1,61 +1,111 @@
 #!/bin/bash
 set -euo pipefail
 
-# Script to run ON A MAC to extract the tvOS SDK for cross-compilation on Linux.
-# Requires Xcode installed.
+# Extract the tvOS SDK from Xcode.
+# Can run on macOS (extracts locally) or Linux (downloads from GitHub Actions artifact).
+#
+# macOS usage:
+#   ./scripts/extract-tvos-sdk.sh
+#   # → produces tvos-sdk-appletvos.tar.gz
+#
+# Linux usage:
+#   # First, run the GitHub Actions workflow "Extract tvOS SDK" in this repo.
+#   # Then download the artifact:
+#   ./scripts/extract-tvos-sdk.sh --download
+#   # Or with a specific run ID:
+#   ./scripts/extract-tvos-sdk.sh --download --run-id 1234567890
+#
+#   # Or if you already have the tar.gz:
+#   tar -xzf tvos-sdk-appletvos.tar.gz -C ~/tvos-sdk
 
-XCODE_APP="${XCODE_APP:-/Applications/Xcode.app}"
-SDK_NAME="${SDK_NAME:-appletvos}"
-OUTPUT_DIR="${OUTPUT_DIR:-$PWD/tvos-sdk-bundle}"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="troendheim/finn"
 
-echo "=== Extracting tvOS SDK from Xcode ==="
+download_from_actions() {
+    local RUN_ID="${1:-latest}"
+    local GH="${GH_CLI:-gh}"
 
-SDK_PATH=$(xcrun --sdk "$SDK_NAME" --show-sdk-path)
-echo "SDK path: $SDK_PATH"
+    if ! command -v $GH &>/dev/null; then
+        echo "ERROR: GitHub CLI 'gh' not found. Install it first:"
+        echo "  sudo dnf install gh     # Fedora"
+        echo "  gh auth login            # authenticate"
+        echo ""
+        echo "Alternatively, download the artifact manually from GitHub Actions:"
+        echo "  https://github.com/$REPO/actions/workflows/extract-tvos-sdk.yml"
+        exit 1
+    fi
 
-SWIFT_VERSION=$(xcrun --sdk "$SDK_NAME" swiftc --version | head -1)
-echo "Swift version: $SWIFT_VERSION"
+    echo "Downloading tvOS SDK artifact from GitHub Actions..."
 
-# Find the Xcode toolchain path
-TOOLCHAIN_DIR=$(xcode-select -p)/Toolchains/XcodeDefault.xctoolchain
-echo "Toolchain: $TOOLCHAIN_DIR"
+    if [ "$RUN_ID" = "latest" ]; then
+        echo "Finding latest successful run..."
+        RUN_ID=$($GH run list --workflow extract-tvos-sdk.yml --status success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+        if [ -z "$RUN_ID" ]; then
+            echo "ERROR: No successful workflow run found."
+            echo "Run the workflow first: https://github.com/$REPO/actions/workflows/extract-tvos-sdk.yml"
+            exit 1
+        fi
+        echo "Using run ID: $RUN_ID"
+    fi
 
-PLATFORM_DIR=$(dirname "$SDK_PATH")
-echo "Platform: $PLATFORM_DIR"
+    $GH run download "$RUN_ID" --name tvos-sdk-appletvos --dir "$PROJECT_DIR" 2>&1
+    echo ""
+    echo "Downloaded: $PROJECT_DIR/tvos-sdk-appletvos.tar.gz"
+    echo ""
+    echo "Extract it: tar -xzf tvos-sdk-appletvos.tar.gz -C ~/tvos-sdk"
+}
 
-rm -rf "$OUTPUT_DIR"
-mkdir -p "$OUTPUT_DIR/sdk"
-mkdir -p "$OUTPUT_DIR/swift-libs"
+# --- macOS extraction (original path) ---
+extract_on_macos() {
+    if [[ "$(uname)" != "Darwin" ]]; then
+        echo "ERROR: This script must run on macOS to extract the SDK locally."
+        echo "On Linux, use '--download' to get the SDK from GitHub Actions."
+        exit 1
+    fi
 
-# Copy the SDK
-echo "Copying SDK..."
-cp -a "$SDK_PATH" "$OUTPUT_DIR/sdk/AppleTVOS.sdk"
-cp -a "$PLATFORM_DIR" "$OUTPUT_DIR/sdk/AppleTVOS.platform"
+    XCODE_PATH="$(xcode-select -p 2>/dev/null || echo "")"
+    if [ -z "$XCODE_PATH" ] || [ ! -d "$XCODE_PATH" ]; then
+        echo "ERROR: Xcode not found. Install Xcode from the App Store."
+        exit 1
+    fi
 
-# Copy tvOS Swift runtime libraries
-echo "Copying Swift runtime libs..."
-SWIFT_LIB_DIR="$TOOLCHAIN_DIR/usr/lib/swift/appletvos"
-if [ -d "$SWIFT_LIB_DIR" ]; then
-    cp -a "$SWIFT_LIB_DIR" "$OUTPUT_DIR/swift-libs/"
-else
-    echo "WARNING: Could not find Swift libs at $SWIFT_LIB_DIR"
-fi
+    XCODE_PATH="${XCODE_PATH%/Contents/Developer}"     # strip trailing Developer
+    SDK_PATH="$XCODE_PATH/Contents/Developer/Platforms/AppleTVOS.platform/Developer/SDKs"
+    SWIFT_PATH="$XCODE_PATH/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/appletvos"
 
-# Copy prebuilt Swift modules
-SWIFT_MODULE_DIR="$TOOLCHAIN_DIR/usr/lib/swift/appletvos/prebuilt-modules"
-if [ -d "$SWIFT_MODULE_DIR" ]; then
-    cp -a "$SWIFT_MODULE_DIR" "$OUTPUT_DIR/swift-libs/"
-fi
+    SDK=$(find "$SDK_PATH" -name "*.sdk" -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1)
+    if [ -z "$SDK" ]; then
+        echo "ERROR: No tvOS SDK found in $SDK_PATH"
+        exit 1
+    fi
 
-# Package it all up
-ARCHIVE_NAME="tvos-sdk-$(echo "$SDK_NAME" | tr -d ' ').tar.gz"
-echo "Creating archive: $ARCHIVE_NAME"
-tar -czf "$ARCHIVE_NAME" -C "$OUTPUT_DIR" .
+    echo "Found tvOS SDK: $(basename "$SDK")"
 
-echo ""
-echo "=== Done ==="
-echo "SDK bundle created at: $PWD/$ARCHIVE_NAME"
-echo ""
-echo "Transfer this file to your Linux machine and run:"
-echo "  tar -xzf $ARCHIVE_NAME -C ~/tvos-sdk"
-echo "  ./scripts/build-tvos.sh"
+    mkdir -p "$PROJECT_DIR/sdk-package"
+    cp -a "$SDK" "$PROJECT_DIR/sdk-package/"
+
+    if [ -d "$SWIFT_PATH" ]; then
+        mkdir -p "$PROJECT_DIR/sdk-package/swift-resources"
+        cp -a "$SWIFT_PATH"/* "$PROJECT_DIR/sdk-package/swift-resources/"
+        echo "Swift resources copied"
+    fi
+
+    tar -czf "$PROJECT_DIR/tvos-sdk-appletvos.tar.gz" -C "$PROJECT_DIR/sdk-package" .
+    rm -rf "$PROJECT_DIR/sdk-package"
+    echo ""
+    echo "=== Done ==="
+    echo "Package: $PROJECT_DIR/tvos-sdk-appletvos.tar.gz ($(du -sh "$PROJECT_DIR/tvos-sdk-appletvos.tar.gz" | cut -f1))"
+    echo ""
+    echo "Transfer this file to your Linux machine and extract:"
+    echo "  tar -xzf tvos-sdk-appletvos.tar.gz -C ~/tvos-sdk"
+}
+
+# --- Main ---
+case "${1:-}" in
+    --download)
+        download_from_actions "${2:-latest}"
+        ;;
+    *)
+        extract_on_macos
+        ;;
+esac

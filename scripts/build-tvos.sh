@@ -26,16 +26,21 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-SDK="$SDK_PATH/sdk/AppleTVOS.sdk"
-SWIFT_LIBS="$SDK_PATH/swift-libs"
+SDK="$SDK_PATH/AppleTVOS.sdk"
+SWIFT_RESOURCES="$SDK_PATH/swift-resources"
 
 if [ ! -d "$SDK" ]; then
     echo "ERROR: tvOS SDK not found at $SDK"
     echo ""
-    echo "You need the tvOS SDK from a Mac with Xcode:"
-    echo "  1. On a Mac: ./scripts/extract-tvos-sdk.sh"
-    echo "  2. Transfer the .tar.gz to this Linux machine"
+    echo "To get the tvOS SDK (no Mac required):"
+    echo "  1. Run the GitHub Actions workflow:"
+    echo "     https://github.com/troendheim/finn/actions/workflows/extract-tvos-sdk.yml"
+    echo "  2. Download the artifact:"
+    echo "     ./scripts/extract-tvos-sdk.sh --download"
     echo "  3. Extract: tar -xzf tvos-sdk-appletvos.tar.gz -C ~/tvos-sdk"
+    echo ""
+    echo "Or, if you have a Mac with Xcode:"
+    echo "  ./scripts/extract-tvos-sdk.sh"
     echo ""
     echo "Or set SDK_PATH to point to your SDK directory."
     exit 1
@@ -65,13 +70,13 @@ $CONTAINER_CMD run --rm \
     "$SWIFT_IMAGE" \
     bash -c "
         set -euo pipefail
-        SDK=/sdk/sdk/AppleTVOS.sdk
-        SWIFT_LIBS=/sdk/swift-libs
+        SDK=/sdk/AppleTVOS.sdk
+        SWIFT_RESOURCES=/sdk/swift-resources
         TRIPLE=$TRIPLE
 
         RESOURCE_FLAG=''
-        if [ -d \"\$SWIFT_LIBS\" ]; then
-            RESOURCE_FLAG='-Xswiftc -resource-dir -Xswiftc '\$SWIFT_LIBS
+        if [ -d \"\$SWIFT_RESOURCES\" ]; then
+            RESOURCE_FLAG='-Xswiftc -resource-dir -Xswiftc '\$SWIFT_RESOURCES
         fi
 
         echo 'Resolving dependencies...'

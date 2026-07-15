@@ -22,38 +22,38 @@ Then open in Xcode and run on an Apple TV or the simulator.
 
 ## Building & Deploying from Linux
 
-You can build and deploy to an Apple TV directly from Linux — no Xcode or macOS needed for the build/deploy step. You **do** still need one-time access to a Mac with Xcode to extract the tvOS SDK.
+You can build and deploy to an Apple TV entirely from Linux — **no Mac required**. The tvOS SDK is extracted via a free GitHub Actions workflow and downloaded to your machine.
 
 ### Prerequisites
 
 - **Podman** (pre-installed on Fedora) or Docker
 - **Python 3** with `pymobiledevice3` (auto-installed by deploy script)
 - **Apple TV** on the same local network
-- **tvOS SDK** — extracted once from a Mac (see below)
+- **GitHub CLI** (`gh`) — for downloading the tvOS SDK artifact (one-time setup)
 
 ### Quick Start
 
 ```bash
-# 1. One-time: Extract the tvOS SDK from a Mac
-#    (run this on your Mac, then transfer the tar.gz to this Linux machine)
-./scripts/extract-tvos-sdk.sh
-#    → produces tvos-sdk-appletvos.tar.gz
-
-# 2. On Linux: Extract the SDK
+# 1. One-time: Get the tvOS SDK (no Mac needed!)
+#    Go to: https://github.com/troendheim/finn/actions/workflows/extract-tvos-sdk.yml
+#    Click "Run workflow", wait ~2 minutes, then:
+./scripts/extract-tvos-sdk.sh --download
 tar -xzf tvos-sdk-appletvos.tar.gz -C ~/tvos-sdk
 
-# 3. Build for tvOS
+# 2. Build for tvOS
 ./scripts/build-tvos.sh
 
-# 4. Package into .app bundle
+# 3. Package into .app bundle
 ./scripts/package-tvos.sh
 
-# 5. Pair with Apple TV (first time only)
+# 4. Pair with Apple TV (first time only)
 ./scripts/deploy-tvos.sh --pair --device <AppleTV-UDID>
 
-# 6. Deploy to Apple TV
+# 5. Deploy to Apple TV
 ./scripts/deploy-tvos.sh
 ```
+
+> If you *do* have a Mac with Xcode, you can skip GitHub Actions. Just run `./scripts/extract-tvos-sdk.sh` on the Mac and transfer the resulting `.tar.gz` to this machine.
 
 ### How it works
 
@@ -84,6 +84,6 @@ To find the UDID, run `./scripts/deploy-tvos.sh --pair` which will scan the netw
 
 **"Apple TV not found"**: Ensure the Apple TV is awake, on the same network, and the Remote App and Devices screen is open.
 
-**Build fails with SDK errors**: Make sure the SDK was properly extracted. The path `~/tvos-sdk/sdk/AppleTVOS.sdk` must exist.
+**Build fails with SDK errors**: Make sure the SDK was properly extracted. The path `~/tvos-sdk/AppleTVOS.sdk` must exist.
 
 **"Cannot find type 'ObservableObject'"**: This means you're building for Linux native instead of tvOS. The build script MUST use `--triple arm64-apple-tvos` with the SDK.

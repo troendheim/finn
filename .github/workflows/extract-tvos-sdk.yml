@@ -1,0 +1,68 @@
+name: Extract tvOS SDK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/extract-tvos-sdk.yml'
+    branches:
+      - main
+
+jobs:
+  extract:
+    runs-on: macos-latest
+    steps:
+      - name: Check Xcode version
+        run: |
+          xcodebuild -version
+          echo "=== Available tvOS SDKs ==="
+          xcodebuild -showsdks 2>&1 | grep -i tvos || true
+          ls -d /Applications/Xcode*.app/Contents/Developer/Platforms/AppleTVOS.platform/Developer/SDKs/ 2>/dev/null || true
+
+      - name: Find tvOS SDK
+        id: sdk
+        run: |
+          SDK_PATH=$(find /Applications/Xcode*.app/Contents/Developer/Platforms/AppleTVOS.platform/Developer/SDKs -name "*.sdk" -maxdepth 1 -type d 2>/dev/null | sort -V | tail -1)
+          if [ -z "$SDK_PATH" ]; then
+            echo "ERROR: No tvOS SDK found!"
+            exit 1
+          fi
+          SDK_NAME=$(basename "$SDK_PATH")
+          echo "sdk_path=$SDK_PATH" >> $GITHUB_OUTPUT
+          echo "sdk_name=$SDK_NAME" >> $GITHUB_OUTPUT
+          echo "Found tvOS SDK: $SDK_PATH"
+
+      - name: Find Swift resource dir
+        id: swiftlib
+        run: |
+          # Swift resource dir for tvOS cross-compilation
+          SWIFT_DIR=$(find /Applications/Xcode*.app/Contents/Developer/Toolchains -path "*/usr/lib/swift/appletvos" -maxdepth 8 -type d 2>/dev/null | head -1)
+          if [ -z "$SWIFT_DIR" ]; then
+            echo "WARNING: No tvOS Swift resource dir found, using swift/appletvos from toolchain"
+            SWIFT_DIR=$(find /Applications/Xcode*.app/Contents/Developer/Toolchains -path "*/usr/lib/swift" -maxdepth 8 -type d 2>/dev/null | head -1)
+          fi
+          echo "swift_dir=$SWIFT_DIR" >> $GITHUB_OUTPUT
+          echo "Found Swift dir: $SWIFT_DIR"
+
+      - name: Package SDK
+        env:
+          SDK_PATH: ${{ steps.sdk.outputs.sdk_path }}
+          SDK_NAME: ${{ steps.sdk.outputs.sdk_name }}
+          SWIFT_DIR: ${{ steps.swiftlib.outputs.swift_dir }}
+        run: |
+          mkdir -p sdk-package
+          cp -a "$SDK_PATH" sdk-package/
+          if [ -n "$SWIFT_DIR" ] && [ -d "$SWIFT_DIR" ]; then
+            mkdir -p sdk-package/swift-resources
+            cp -a "$SWIFT_DIR"/* sdk-package/swift-resources/
+            echo "Swift resources: $(ls sdk-package/swift-resources/ | head -5)"
+          fi
+          tar -czf tvos-sdk-appletvos.tar.gz -C sdk-package .
+          echo "SDK package size: $(du -sh tvos-sdk-appletvos.tar.gz | cut -f1)"
+
+      - name: Upload SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tvos-sdk-appletvos
+          path: tvos-sdk-appletvos.tar.gz
+          retention-days: 7
